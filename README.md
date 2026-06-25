@@ -5,20 +5,19 @@
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black)](https://developer.mozilla.org/docs/Web/JavaScript)
 [![Zero dependencies](https://img.shields.io/badge/dependencies-0-22C55E?style=flat-square)](package.json)
-![License](https://img.shields.io/badge/license-MIT-22C55E?style=flat-square)
+[![License](https://img.shields.io/badge/license-MIT-22C55E?style=flat-square)](LICENSE)
 
 **Lightweight GUI for Claude Code sessions. Zero dependencies.**
 
 Browse, search, resume, and clean up your sessions in one local web page.<br>
-The `claude -- resume` hides session IDs --> this doesn't.
+Claude Code's `--resume` picker hides session IDs — this doesn't.
 
 </div>
 
 ## Install
 
-> Install where you run Claude Code
-   - `Claude Code in WSL → install in **WSL**`
-   - `Claude Code in Windows → install in **PowerShell**`
+> **Install where you run Claude Code.**
+> Claude Code in WSL → install in WSL. Claude Code on Windows → install in PowerShell.
 
 ```bash
 npm install -g github:orditus-llc/claude-gui
