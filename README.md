@@ -1,83 +1,70 @@
+<div align="center">
+
 # claude-gui
 
-A lightweight local web interface for your Claude Code sessions and memory. Browse, search, resume, and clean up your history in one place. Zero dependencies, one command.
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black)](https://developer.mozilla.org/docs/Web/JavaScript)
+[![Zero dependencies](https://img.shields.io/badge/dependencies-0-22C55E?style=flat-square)](package.json)
+![License](https://img.shields.io/badge/license-MIT-22C55E?style=flat-square)
 
-Claude Code's CLI does not show session IDs in its resume picker. claude-gui gives you a searchable view of every session with one-click resume, plus deletion, pinning, and memory editing.
+**Lightweight GUI for Claude Code sessions. Zero dependencies.**
+
+Browse, search, resume, and clean up your sessions in one local web page.<br>
+The `claude -- resume` hides session IDs --> this doesn't.
+
+</div>
 
 ## Install
 
-On Windows, run these in a WSL terminal. On Linux and macOS, use your normal terminal.
-
-Install globally to add a `claude-gui` command to your shell:
+> On Windows, run in **WSL** — same place you run Claude Code.
 
 ```bash
 npm install -g github:orditus-llc/claude-gui
 ```
 
-Or clone it, so you can edit it in VSCode or keep it in your GitHub folder. On Windows you can clone into your Windows files with Git or VSCode, then run the install from a WSL terminal pointed at that folder:
+## Usage
+
+```bash
+claude-gui        # opens http://localhost:3131
+claude-gui 8080   # custom port
+```
+
+## Features
+
+- Find **all** Claude Code sessions, across **all** projects
+  - **Full conversations**, collapsible, skimmable
+- Quickly resume any session
+  - Filter, pin, & delete
+  - Skim context window & file size
+- Read and **EDIT** project memory
+- **Customize** session retention period
+
+## Development
+
+Want to edit it? Clone anywhere (your Windows drive is fine for VSCode/Git), then install **from WSL**:
 
 ```bash
 git clone https://github.com/orditus-llc/claude-gui.git
 cd claude-gui
-npm install -g .
+npm install -g .   # or: npm link (live edits)
 ```
 
-## Run
-
-```bash
-claude-gui
-```
-
-This starts a local server at `http://localhost:3131` and opens it in your browser. Use a different port by passing it as an argument:
-
-```bash
-claude-gui 8080
-```
-
-To run without installing globally, use `node index.js` from the project folder (from a WSL terminal on Windows).
-
-## Features
-
-- Browse and search every session across all projects
-- View full conversations with rendered Markdown and collapsible tool calls
-- Copy a ready-to-run `claude --resume` command for any session
-- Pin favorites, delete sessions, and filter by project
-- Per-session context-window and size badges
-- Read and edit your project memory files
-- Adjustable session retention and light or dark themes
-
-## Requirements
-
-- Node.js 18 or newer
-- A web browser
-- Linux, macOS, or Windows with WSL
-
-## Launch it from the same place you run Claude Code
-
-Claude Code writes its sessions to `~/.claude/projects` inside whatever environment it runs in, and claude-gui reads that same location. So launch claude-gui from the same place you run Claude Code.
-
-On Windows that means a **WSL terminal**: you run Claude Code in WSL, so run claude-gui in WSL. The project files themselves can live anywhere, including your Windows drive (for example `Documents\GitHub`, so you can edit them in VSCode and commit with Windows Git). Only the terminal you launch from matters.
-
-The one thing that does not work is running it with **native Windows Node** (from PowerShell or CMD): Node on Windows does not set `HOME`, so it cannot find your sessions. Always launch from WSL.
-
-### Platform support
-
-| Platform                                 | Supported |
-| ---------------------------------------- | :-------: |
-| Linux                                    |    Yes    |
-| macOS                                    |    Yes    |
-| Windows, launched from WSL               |    Yes    |
-| Windows, native Node (PowerShell or CMD) |    No     |
+Why WSL? Claude Code writes sessions to `~/.claude/projects` inside WSL. claude-gui reads that path, so it must run there too. The files can live on Windows; the command must run in WSL. Native Windows Node (PowerShell/CMD) can't find your sessions — it won't work.
 
 ## How it works
 
-claude-gui is a single zero-dependency Node server plus one HTML page. It reads the `.jsonl` session logs in `~/.claude/projects` and renders them in your browser. It writes only when you ask it to: deleting a session, editing a memory file, changing retention, or saving a pin (stored in a local `claude-gui-data.json`).
+One Node server, one HTML page. Reads `~/.claude/projects/*.jsonl`. Writes only on your action (delete, edit memory, pin, retention), to a local `claude-gui-data.json`.
 
-## Roadmap
+## Requirements
 
-- Subagent drill-in: open a subagent's transcript from its Task badge
-- Archive: hide a session with a reversible move instead of deleting
+Node 18+, a browser. Linux, macOS, or Windows via WSL.
 
 ## License
 
 MIT
+
+## Future Features (To Do)
+
+- [ ] Add subagent sessions
+- [ ] Archive (reversible delete)
+- [ ] Compress old conversations

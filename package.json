@@ -15,7 +15,7 @@
   },
   "keywords": ["claude", "anthropic", "claude-code", "session-manager", "ai"],
   "license": "MIT",
-  "os": ["linux", "darwin"],
+  "os": ["linux", "darwin", "win32"],
   "scripts": {
     "start": "node index.js"
   }

@@ -3,12 +3,17 @@
 
 const http = require('http');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const readline = require('readline');
 const { exec } = require('child_process');
 
-const PORT = Number.isInteger(parseInt(process.argv[2])) ? parseInt(process.argv[2]) : 3131;
-const HOME = process.env.HOME || '/root';
+// Default port differs per environment so a Windows instance and a WSL instance
+// can both run at once. WSL2 forwards localhost to Windows, so sharing a default
+// would make one instance mistake the other for itself.
+const DEFAULT_PORT = process.platform === 'win32' ? 3132 : 3131;
+const PORT = Number.isInteger(parseInt(process.argv[2])) ? parseInt(process.argv[2]) : DEFAULT_PORT;
+const HOME = os.homedir();
 const CLAUDE_PROJECTS = path.join(HOME, '.claude', 'projects');
 const SETTINGS_PATH = path.join(HOME, '.claude', 'settings.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -334,6 +339,8 @@ function openBrowser(url) {
     exec(`/mnt/c/Windows/System32/cmd.exe /c start "" "${url}"`, err => {
       if (err) exec(`xdg-open "${url}"`, () => {});
     });
+  } else if (process.platform === 'win32') {
+    exec(`cmd /c start "" "${url}"`);
   } else if (process.platform === 'darwin') {
     exec(`open "${url}"`);
   } else {
