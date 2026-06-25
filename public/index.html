@@ -449,6 +449,13 @@
       cursor: pointer; transition: border-color 0.15s, color 0.15s;
     }
     .mem-edit:hover { border-color: var(--accent); color: var(--accent); }
+    .mem-del {
+      flex-shrink: 0; background: none; border: 1px solid var(--border2);
+      color: var(--text2); font-size: 10.5px; padding: 2px 9px; border-radius: 4px;
+      cursor: pointer; transition: border-color 0.15s, color 0.15s;
+    }
+    .mem-del:hover { border-color: var(--red); color: var(--red); }
+    .mem-del.confirming { border-color: var(--red); color: var(--red); }
     .mem-edit-area {
       width: 100%; min-height: 260px; resize: vertical;
       background: var(--code-bg); border: 1px solid var(--border2); border-radius: 6px;
@@ -1018,6 +1025,7 @@ function renderMemoryFile(f, i) {
     <div class="mem-file-head">
       <span class="mem-name">${esc(f.name)}</span>${badge}${desc}
       <button class="mem-edit" onclick="editMem(${i})">Edit</button>
+      <button class="mem-del" id="memdel-${i}" onclick="deleteMem(${i})" title="Delete this file (click twice)">Delete</button>
     </div>
     <div class="mem-body md-body" id="membody-${i}">${renderMd(body)}</div>
   </div>`;
@@ -1060,6 +1068,41 @@ async function saveMem(i) {
   } catch (e) {
     status.className = 'mem-save-status err';
     status.textContent = 'Error: ' + e.message;
+  }
+}
+
+const pendingMemDeletes = {};
+function deleteMem(i) {
+  const btn = document.getElementById('memdel-' + i);
+  if (!btn) return;
+  if (pendingMemDeletes[i]) {
+    clearTimeout(pendingMemDeletes[i]); delete pendingMemDeletes[i];
+    btn.textContent = 'Deleting…'; btn.classList.remove('confirming');
+    fetch('/api/memory/file', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project: activeMemProject, name: memFiles[i].name }),
+    }).then(r => r.json()).then(data => {
+      if (data.error) throw new Error(data.error);
+      return refreshMemoryAfterDelete();
+    }).catch(e => { btn.textContent = 'Error'; });
+  } else {
+    btn.textContent = 'Delete?'; btn.classList.add('confirming');
+    pendingMemDeletes[i] = setTimeout(() => {
+      btn.textContent = 'Delete'; btn.classList.remove('confirming');
+      delete pendingMemDeletes[i];
+    }, 2000);
+  }
+}
+
+async function refreshMemoryAfterDelete() {
+  try { memProjects = await fetch('/api/memory').then(r => r.json()); memProjectsLoaded = true; } catch {}
+  if (memProjects.some(p => p.projectDir === activeMemProject)) {
+    await openMemoryProject(activeMemProject);   // re-fetch files, re-render panel + list
+  } else {
+    activeMemProject = null;                      // last file gone — project drops off the list
+    renderMemoryList();
+    showEmpty();
   }
 }
 

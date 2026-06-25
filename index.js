@@ -127,6 +127,15 @@ function writeMemoryFile(projectDir, name, content) {
   return { ok: true };
 }
 
+function deleteMemoryFile(projectDir, name) {
+  if (typeof projectDir !== 'string' || !/^[^/\\]+$/.test(projectDir)) throw new Error('invalid project');
+  if (typeof name !== 'string' || name.includes('..') || !/^[A-Za-z0-9._-]+\.md$/.test(name)) throw new Error('invalid file name');
+  const fp = path.join(CLAUDE_PROJECTS, projectDir, MEMORY_DIRNAME, name);
+  if (!fs.existsSync(fp)) throw new Error('file not found');
+  fs.unlinkSync(fp);
+  return { ok: true };
+}
+
 // ── Conversation messages ─────────────────────────────────────────────
 function toolSummary(name, input) {
   if (!input) return '';
@@ -327,6 +336,13 @@ const server = http.createServer(async (req, res) => {
     try {
       const body = await readBody(req);
       return jsonResponse(res, writeMemoryFile(body.project, body.name, body.content));
+    } catch (e) { return jsonResponse(res, { error: e.message }, 400); }
+  }
+  // Memory: delete one memory file
+  if (method === 'DELETE' && pathname === '/api/memory/file') {
+    try {
+      const body = await readBody(req);
+      return jsonResponse(res, deleteMemoryFile(body.project, body.name));
     } catch (e) { return jsonResponse(res, { error: e.message }, 400); }
   }
 
