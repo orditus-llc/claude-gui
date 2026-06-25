@@ -1,0 +1,22 @@
+{
+  "name": "claude-gui",
+  "version": "1.0.0",
+  "description": "Lightweight session manager for Claude Code — browse, search, view, and delete chat history",
+  "main": "index.js",
+  "bin": {
+    "claude-gui": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "public/"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["claude", "anthropic", "claude-code", "session-manager", "ai"],
+  "license": "MIT",
+  "os": ["linux", "darwin"],
+  "scripts": {
+    "start": "node index.js"
+  }
+}
