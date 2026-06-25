@@ -16,7 +16,9 @@ The `claude -- resume` hides session IDs --> this doesn't.
 
 ## Install
 
-> On Windows, run in **WSL** — same place you run Claude Code.
+> Install where you run Claude Code
+   - `Claude Code in WSL → install in **WSL**`
+   - `Claude Code in Windows → install in **PowerShell**`
 
 ```bash
 npm install -g github:orditus-llc/claude-gui
@@ -41,7 +43,7 @@ claude-gui 8080   # custom port
 
 ## Development
 
-Want to edit it? Clone anywhere (your Windows drive is fine for VSCode/Git), then install **from WSL**:
+Want to edit it? Clone anywhere (your Windows drive is fine for VSCode/Git), then install:
 
 ```bash
 git clone https://github.com/orditus-llc/claude-gui.git
@@ -49,7 +51,7 @@ cd claude-gui
 npm install -g .   # or: npm link (live edits)
 ```
 
-Why WSL? Claude Code writes sessions to `~/.claude/projects` inside WSL. claude-gui reads that path, so it must run there too. The files can live on Windows; the command must run in WSL. Native Windows Node (PowerShell/CMD) can't find your sessions — it won't work.
+claude-gui reads `~/.claude/projects` in whatever environment it runs in, so it shows the sessions for **that** environment. Run it where you run Claude Code — WSL for WSL sessions, PowerShell for Windows sessions. Want both? Run both: WSL defaults to port 3131, Windows to 3132, so they don't collide.
 
 ## How it works
 
@@ -57,7 +59,9 @@ One Node server, one HTML page. Reads `~/.claude/projects/*.jsonl`. Writes only 
 
 ## Requirements
 
-Node 18+, a browser. Linux, macOS, or Windows via WSL.
+Node 18+ & a browser
+
+Linux, Windows (WSL or native), or macOS (Not Tested)
 
 ## License
 

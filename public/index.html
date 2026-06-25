@@ -9,43 +9,47 @@
 
     /* ── Option A: Dark Orditus (default dark) ───────── */
     :root {
-      --bg:        #07100d;
-      --surface:   #0c1a13;
-      --surface2:  #111f17;
-      --border:    #1a2e22;
-      --border2:   #243d2e;
+      --bg:        #060d0a;
+      --surface:   #0e1c14;
+      --surface2:  #152619;
+      --border:    #1f3829;
+      --border2:   #2d5040;
       --accent:    #1DB46B;
       --accent-hi: #2ecc7a;
-      --accent-lo: #0d2e1d;
-      --text1:     #dff0e8;
-      --text2:     #7aaa8e;
-      --text3:     #3a5a47;
+      --accent-lo: #0e2e1c;
+      --text1:     #e2f2eb;
+      --text2:     #93c4a8;
+      --text3:     #5a8a70;
       --mono:      'Cascadia Code','JetBrains Mono','Fira Code',Consolas,monospace;
       --green:     #1DB46B;
       --red:       #e05a5a;
       --red-bg:    #2a1010;
-      --code-bg:   #040f09;
-      --code-text: #88c8a0;
-      --tool-dim:  #4a8a65;
+      --amber:     #d9a441;
+      --amber-dim: #a8823a;
+      --code-bg:   #040c08;
+      --code-text: #8ecfa6;
+      --tool-dim:  #5aaa7a;
     }
 
     /* ── Light mode overrides ────────────────────────── */
     body[data-theme="light"] {
-      --bg:        #f5f9f6;
+      --bg:        #eef4f0;
       --surface:   #ffffff;
-      --surface2:  #edf4f0;
-      --border:    #e6ece8;
-      --border2:   #ccddd4;
+      --surface2:  #f4f9f6;
+      --border:    #d0ddd6;
+      --border2:   #b8cfc4;
       --accent:    #15673E;
       --accent-hi: #10402a;
-      --accent-lo: #d4ede1;
-      --text1:     #1f2420;
-      --text2:     #6f7d74;
-      --text3:     #b0c4b8;
+      --accent-lo: #d0ece0;
+      --text1:     #1a2420;
+      --text2:     #4a6657;
+      --text3:     #6a8c78;
       --green:     #1DB46B;
       --red:       #c0392b;
       --red-bg:    #fdf0ef;
-      --code-bg:   #edf4f0;
+      --amber:     #9a6b1a;
+      --amber-dim: #b08a3a;
+      --code-bg:   #eaf2ed;
       --code-text: #1a4a30;
       --tool-dim:  #15673E;
     }
@@ -58,7 +62,7 @@
       color: var(--text1);
       font-size: 13px;
       line-height: 1.5;
-      zoom: 1.35;  /* whole-app scale (~+4.5pt). Bump higher for bigger, 1.0 = original. */
+      zoom: 1.25;  /* whole-app scale (~+4.5pt). Bump higher for bigger, 1.0 = original. */
     }
 
     /* ── App shell ────────────────────────────────────── */
@@ -231,8 +235,8 @@
       align-items: center; transition: color 0.15s;
     }
     .btn-pin:hover { color: var(--accent); }
-    .btn-pin.pinned { color: #e0b33a; }
-    .btn-pin.pinned svg { fill: #e0b33a; }
+    .btn-pin.pinned { color: var(--amber); }
+    .btn-pin.pinned svg { fill: var(--amber); }
 
     .s-path {
       font-size: 10.5px; color: var(--tool-dim); font-weight: 500;
@@ -247,6 +251,7 @@
     .s-proj { color: var(--tool-dim); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dot { color: var(--text3); flex-shrink: 0; }
     .s-ctx { color: var(--text2); flex-shrink: 0; }
+    .s-ctx.elevated { color: var(--amber); font-weight: 600; }
     .s-ctx.warn { color: var(--red); font-weight: 600; }
 
     .s-resume {
@@ -833,7 +838,7 @@ function renderCard(s) {
       <span>${s.msgCount}m</span>
       <span class="dot">·</span>
       <span>${size}</span>
-      ${s.ctxTokens ? `<span class="dot">·</span><span class="s-ctx${s.ctxTokens / ctxMax >= 0.8 ? ' warn' : ''}" title="Context at last turn: ${s.ctxTokens.toLocaleString()} / ${ctxMax.toLocaleString()} tokens">ctx ${fmtK(s.ctxTokens)} (${Math.round(s.ctxTokens / ctxMax * 100)}%)</span>` : ''}
+      ${s.ctxTokens ? `<span class="dot">·</span><span class="s-ctx${(r => r >= 0.8 ? ' warn' : r >= 0.5 ? ' elevated' : '')(s.ctxTokens / ctxMax)}" title="Context at last turn: ${s.ctxTokens.toLocaleString()} / ${ctxMax.toLocaleString()} tokens">ctx ${fmtK(s.ctxTokens)} (${Math.round(s.ctxTokens / ctxMax * 100)}%)</span>` : ''}
       <div class="s-actions-meta">
         <div class="s-dates" title="Started: ${esc(s.firstTs)}\nLast: ${esc(s.lastTs)}">${fmtDateRange(s)}</div>
         <button class="btn-pin${isPinned ? ' pinned' : ''}" data-id="${s.id}" title="Pin to top">${STAR_SVG}</button>
