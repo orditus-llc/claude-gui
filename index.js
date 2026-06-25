@@ -7,7 +7,7 @@ const path = require('path');
 const readline = require('readline');
 const { exec } = require('child_process');
 
-const PORT = parseInt(process.argv[2]) || 3131;
+const PORT = Number.isInteger(parseInt(process.argv[2])) ? parseInt(process.argv[2]) : 3131;
 const HOME = process.env.HOME || '/root';
 const CLAUDE_PROJECTS = path.join(HOME, '.claude', 'projects');
 const SETTINGS_PATH = path.join(HOME, '.claude', 'settings.json');
@@ -341,14 +341,46 @@ function openBrowser(url) {
   }
 }
 
-server.listen(PORT, () => {
-  const siteUrl = `http://localhost:${PORT}`;
+function banner(port) {
+  const siteUrl = `http://localhost:${port}`;
   process.stdout.write('\x1b[2J\x1b[H');
   console.log('\n  \x1b[32m◆ Claude Sessions\x1b[0m\n');
   console.log(`  ${siteUrl}`);
   console.log(`  Sessions: ${CLAUDE_PROJECTS}`);
   console.log('  Ctrl+C to stop\n');
   openBrowser(siteUrl);
-});
+}
+
+// Is claude-gui already serving on this port? (used to handle a busy port nicely)
+function claudeGuiAlreadyOn(port) {
+  return new Promise((resolve) => {
+    const req = http.get({ host: '127.0.0.1', port, path: '/api/sessions', timeout: 1000 }, (res) => {
+      let body = '';
+      res.on('data', c => body += c);
+      res.on('end', () => { try { resolve(Array.isArray(JSON.parse(body))); } catch { resolve(false); } });
+    });
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => { req.destroy(); resolve(false); });
+  });
+}
+
+function start(port) {
+  server.once('error', async (err) => {
+    if (err.code !== 'EADDRINUSE') {
+      console.error(`\n  Could not start claude-gui: ${err.message}\n`);
+      process.exit(1);
+    }
+    if (await claudeGuiAlreadyOn(port)) {
+      console.log(`\n  \x1b[32m◆ Claude Sessions\x1b[0m is already running at http://localhost:${port}\n  Opening it in your browser...\n`);
+      openBrowser(`http://localhost:${port}`);
+      process.exit(0);
+    }
+    console.error(`\n  Port ${port} is in use by another program.\n  Start claude-gui on a different port:\n    claude-gui ${port + 1}\n`);
+    process.exit(1);
+  });
+  server.listen(port, () => banner(port));
+}
+
+start(PORT);
 
 process.on('SIGINT', () => { console.log('\n  Stopped.\n'); server.close(() => process.exit(0)); });
