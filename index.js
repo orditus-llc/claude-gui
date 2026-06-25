@@ -297,7 +297,7 @@ const server = http.createServer(async (req, res) => {
       const settings = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8'));
       if ('cleanupPeriodDays' in body) {
         const days = Number(body.cleanupPeriodDays);
-        if (Number.isFinite(days) && days >= 0) settings.cleanupPeriodDays = Math.round(days);
+        if (Number.isFinite(days) && days >= 1) settings.cleanupPeriodDays = Math.round(days);  // Claude Code rejects 0; minimum is 1
       }
       fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2));
       return jsonResponse(res, settings);
