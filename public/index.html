@@ -29,6 +29,14 @@
       --code-bg:   #040c08;
       --code-text: #8ecfa6;
       --tool-dim:  #5aaa7a;
+      --scope-user:    #29b6d8;
+      --scope-user-lo: #0d2a32;
+      --scope-proj:    #b07ae8;
+      --scope-proj-lo: #241834;
+      --src-official:    #6a8af0;
+      --src-official-lo: #161f36;
+      --src-third:       #e2873a;
+      --src-third-lo:    #2c1d0d;
     }
 
     /* ── Light mode overrides ────────────────────────── */
@@ -52,6 +60,14 @@
       --code-bg:   #eaf2ed;
       --code-text: #1a4a30;
       --tool-dim:  #15673E;
+      --scope-user:    #0d7f96;
+      --scope-user-lo: #d2edf3;
+      --scope-proj:    #7b4ec2;
+      --scope-proj-lo: #ebe0fa;
+      --src-official:    #3f5fd0;
+      --src-official-lo: #dce3fb;
+      --src-third:       #b4651b;
+      --src-third-lo:    #f6e6d2;
     }
 
     html, body { height: 100%; overflow: hidden; }
@@ -467,6 +483,52 @@
     .mem-save-status { font-size: 11px; color: var(--text3); }
     .mem-save-status.err { color: var(--red); }
 
+    /* Plugins — sidebar cards */
+    .plg-wrap { margin-bottom: 5px; }
+    .plg-wrap .session { margin-bottom: 0; padding-left: 13px; }
+    .plg.user { box-shadow: inset 3px 0 0 var(--scope-user); }
+    .plg.project { box-shadow: inset 3px 0 0 var(--scope-proj); }
+    .plg.expanded { background: var(--surface); border-color: var(--border2); }
+    .plg-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    .plg-mkt { font-size: 10.5px; color: var(--tool-dim); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .plg-name { display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; color: var(--text1); margin: 3px 0 4px; }
+    .plg-caret { flex-shrink: 0; opacity: 0.55; transition: transform 0.15s; }
+    .plg.expanded .plg-caret { transform: rotate(90deg); opacity: 0.9; }
+    .plg-scope { font-weight: 600; text-transform: capitalize; }
+    .plg-scope.user { color: var(--scope-user); }
+    .plg-scope.project { color: var(--scope-proj); }
+    .plg-off { color: var(--text3); border: 1px solid var(--border); border-radius: 8px; padding: 0 5px; font-size: 9.5px; text-transform: uppercase; }
+    .plg-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 7px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; }
+    .plg-badge.official { background: var(--src-official-lo); color: var(--src-official); }
+    .plg-badge.third { background: var(--src-third-lo); color: var(--src-third); }
+
+    /* Plugins — accordion skill rows (nested under expanded card) */
+    .plg-skills { margin: 3px 0 4px 11px; padding-left: 9px; border-left: 1px solid var(--border2); }
+    .plg-srow { padding: 7px 10px; border-radius: 6px; margin-bottom: 2px; cursor: pointer; font-size: 12px; color: var(--text1); display: flex; align-items: center; gap: 8px; border: 1px solid transparent; }
+    .plg-srow:hover { background: var(--surface2); border-color: var(--border); }
+    .plg-srow.active { background: var(--accent-lo); border-color: var(--accent); color: var(--accent); }
+    .plg-srow .nm { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .plg-srow .ct { margin-left: auto; flex-shrink: 0; font-size: 10px; color: var(--text3); }
+    .plg-srow.readme .nm { font-family: inherit; font-style: italic; color: var(--text2); }
+    .plg-loading { display: flex; justify-content: center; padding: 12px; }
+
+    /* Plugins — viewer */
+    .plg-overview { max-width: 720px; }
+    .plg-ov-row { display: flex; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+    .plg-ov-label { width: 92px; flex-shrink: 0; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text3); font-weight: 600; padding-top: 1px; }
+    .plg-ov-val { font-size: 13px; color: var(--text1); }
+    .plg-ov-val.user { color: var(--scope-user); font-weight: 600; }
+    .plg-ov-val.project { color: var(--scope-proj); font-weight: 600; }
+    .plg-ov-repo { font-family: var(--mono); font-size: 11px; color: var(--tool-dim); margin-left: 8px; }
+    .plg-ov-hint { margin-top: 20px; color: var(--text3); font-size: 12px; display: flex; align-items: center; gap: 7px; }
+    .plg-desc { font-size: 12.5px; color: var(--text2); margin: 14px 0 0; line-height: 1.6; }
+    .plg-files-label { font-size: 11px; color: var(--text3); margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+    .plg-files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+    .plg-chip { font-family: var(--mono); font-size: 10.5px; color: var(--text2); background: var(--code-bg); border: 1px solid var(--border2); border-radius: 5px; padding: 4px 9px; cursor: pointer; transition: border-color 0.15s, color 0.15s; }
+    .plg-chip:hover { border-color: var(--src-third); color: var(--src-third); }
+    .plg-chip:disabled { opacity: 0.6; cursor: default; }
+    .v-head-title .plg-badge { vertical-align: middle; margin-left: 6px; }
+
     /* ── Settings modal ───────────────────────────────── */
     .modal-overlay {
       position: fixed; inset: 0; background: rgba(0,0,0,0.6);
@@ -559,6 +621,7 @@
         <div class="view-toggle">
           <button class="vt-btn active" id="vt-chats">Chats</button>
           <button class="vt-btn" id="vt-memory">Memory</button>
+          <button class="vt-btn" id="vt-plugins">Plugins</button>
         </div>
         <!-- Theme toggle -->
         <button class="icon-btn" id="btn-theme" title="Toggle light/dark" style="margin-left:auto">
@@ -666,6 +729,9 @@ let memProjects = [];
 let memProjectsLoaded = false;
 let activeMemProject = null;
 let memFiles = [];
+let pluginItems = [];
+let pluginsLoaded = false;
+let activePlugin = null;
 const pendingDeletes = {};
 let pinned = new Set();
 function savePins() {
@@ -826,7 +892,8 @@ function renderMd(raw) {
   s = s.replace(/\x00BLOCK(\d+)\x00/g, (_, i) => {
     const { lang, code } = blocks[+i];
     const ecode = code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    return `<pre${lang ? ` data-lang="${lang}"` : ''}><code>${ecode}</code></pre>`;
+    const elang = esc(lang);  // info string is untrusted (plugin-supplied) — escape it
+    return `<pre${elang ? ` data-lang="${elang}"` : ''}><code>${ecode}</code></pre>`;
   });
 
   return s;
@@ -907,6 +974,7 @@ function getFiltered() {
 
 function renderList() {
   if (view === 'memory') return renderMemoryList();
+  if (view === 'plugins') return renderPluginList();
   return renderChatList();
 }
 
@@ -1140,17 +1208,187 @@ async function switchView(v) {
   view = v;
   activeId = null;
   activeMemProject = null;
-  document.getElementById('vt-chats').classList.toggle('active', v === 'chats');
-  document.getElementById('vt-memory').classList.toggle('active', v === 'memory');
-  document.getElementById('sort').style.display = v === 'memory' ? 'none' : '';
-  document.querySelector('.sb-row3').style.display = v === 'memory' ? 'none' : '';
-  document.getElementById('search').placeholder = v === 'memory' ? 'Search project path…' : 'Search title, path, or ID…';
+  activePlugin = null;
+  pluginDetail = null;
+  activeSkill = null;
+  ['chats', 'memory', 'plugins'].forEach(x =>
+    document.getElementById('vt-' + x).classList.toggle('active', v === x));
+  const isChats = v === 'chats';
+  document.getElementById('sort').style.display = isChats ? '' : 'none';
+  document.querySelector('.sb-row3').style.display = isChats ? '' : 'none';
+  document.getElementById('search').placeholder =
+    v === 'memory' ? 'Search project path…' : v === 'plugins' ? 'Search plugins…' : 'Search title, path, or ID…';
   showEmpty();
   if (v === 'memory' && !memProjectsLoaded) {
     document.getElementById('list').innerHTML = '<div class="state"><div class="spinner"></div>Loading…</div>';
     try { memProjects = await fetch('/api/memory').then(r => r.json()); memProjectsLoaded = true; } catch {}
   }
+  if (v === 'plugins' && !pluginsLoaded) {
+    document.getElementById('list').innerHTML = '<div class="state"><div class="spinner"></div>Loading…</div>';
+    try { pluginItems = await fetch('/api/plugins').then(r => r.json()); pluginsLoaded = true; } catch {}
+  }
   renderList();
+}
+
+// ── Plugins ──────────────────────────────────────────────────────────
+// Accordion: each plugin card expands in place to reveal its skill names;
+// clicking a skill renders it on the right. Bundled non-doc files open in
+// the user's editor (OS "Open with") rather than dumping inline.
+let pluginDetail = null;   // { readme, skills, ... } for the expanded plugin
+let activeSkill = null;    // skill index, 'readme', or null (= overview)
+
+const CARET_SVG = '<svg class="plg-caret" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>';
+
+function originBadge(o) {
+  return o === 'official'
+    ? '<span class="plg-badge official">Official</span>'
+    : '<span class="plg-badge third">3rd Party</span>';
+}
+
+function activePluginMeta() {
+  return pluginItems.find(x => x.id === activePlugin) || {};
+}
+
+function renderPluginList() {
+  const list = document.getElementById('list');
+  const count = document.getElementById('count');
+  const q = (document.getElementById('search').value || '').toLowerCase().trim();
+  let items = pluginItems;
+  if (q) items = items.filter(p => (p.name + ' ' + p.marketplace + ' ' + p.repo + ' ' + p.description).toLowerCase().includes(q));
+  count.textContent = items.length === pluginItems.length ? '' : `${items.length}/${pluginItems.length}`;
+  if (!items.length) { list.innerHTML = '<div class="state">No plugins found</div>'; return; }
+  list.innerHTML = items.map(p => {
+    const open = p.id === activePlugin;
+    return `<div class="plg-wrap">
+      <div class="session plg ${p.scope}${open ? ' expanded' : ''}" data-plg="${esc(p.id)}">
+        <div class="plg-top">
+          <span class="plg-mkt">Marketplace: ${esc(p.marketplace)}</span>
+          ${originBadge(p.origin)}
+        </div>
+        <div class="plg-name">${CARET_SVG}${esc(p.name)}</div>
+        <div class="s-meta">
+          <span class="plg-scope ${p.scope}">${esc(p.scope)}</span>
+          <span class="dot">·</span>
+          <span>${p.skills} skill${p.skills !== 1 ? 's' : ''}</span>
+          ${p.commands ? `<span class="dot">·</span><span>${p.commands} cmd</span>` : ''}
+          ${p.enabled === false ? '<span class="dot">·</span><span class="plg-off">off</span>' : ''}
+        </div>
+      </div>
+      ${open ? `<div class="plg-skills" id="plg-skills">${renderSkillRows()}</div>` : ''}
+    </div>`;
+  }).join('');
+  list.querySelectorAll('[data-plg]').forEach(el =>
+    el.addEventListener('click', () => togglePlugin(el.dataset.plg)));
+  bindSkillRows();
+}
+
+function renderSkillRows() {
+  if (!pluginDetail) return '<div class="plg-loading"><div class="spinner"></div></div>';
+  if (pluginDetail._err) return `<div class="state">Error: ${esc(pluginDetail._err)}</div>`;
+  let html = pluginDetail.skills.map((s, i) => `
+    <div class="plg-srow${activeSkill === i ? ' active' : ''}" data-skill="${i}">
+      <span class="nm">${esc(s.name)}</span>
+      ${s.extraFiles.length ? `<span class="ct">${s.extraFiles.length} file${s.extraFiles.length !== 1 ? 's' : ''}</span>` : ''}
+    </div>`).join('');
+  if (pluginDetail.readme) {
+    html += `<div class="plg-srow readme${activeSkill === 'readme' ? ' active' : ''}" data-skill="readme">
+      <span class="nm">README.md</span></div>`;
+  }
+  return html || '<div class="state">No skills</div>';
+}
+
+function bindSkillRows() {
+  document.querySelectorAll('#plg-skills [data-skill]').forEach(el =>
+    el.addEventListener('click', (e) => { e.stopPropagation(); selectSkill(el.dataset.skill); }));
+}
+
+async function togglePlugin(id) {
+  if (activePlugin === id) {           // collapse
+    activePlugin = null; pluginDetail = null; activeSkill = null;
+    showEmpty(); renderPluginList(); return;
+  }
+  activePlugin = id; activeSkill = null; pluginDetail = null;
+  renderPluginList();                  // card expands, nested area shows a spinner
+  renderPluginOverview();              // right pane: the overview card
+  try {
+    const d = await fetch(`/api/plugins/skills?id=${encodeURIComponent(id)}`).then(r => r.json());
+    if (d.error) throw new Error(d.error);
+    if (activePlugin === id) pluginDetail = d;
+  } catch (e) {
+    if (activePlugin === id) pluginDetail = { skills: [], readme: '', _err: e.message };
+  }
+  if (activePlugin === id) renderPluginList();
+}
+
+function renderPluginOverview() {
+  const p = activePluginMeta();
+  document.getElementById('v-empty').style.display = 'none';
+  document.getElementById('v-panel').style.display = 'flex';
+  const scopeVal = p.scope === 'project'
+    ? `Project${p.projectPath ? ' — ' + esc(p.projectPath) : ''}`
+    : 'User — available in all projects';
+  document.getElementById('v-head').innerHTML = `
+    <div class="v-head-title">${esc(p.name || '')} ${originBadge(p.origin)}</div>
+    <div class="v-head-meta">Plugin overview</div>`;
+  document.getElementById('v-body').scrollTop = 0;
+  document.getElementById('v-body').innerHTML = `
+    <div class="plg-overview fade-in">
+      <div class="plg-ov-row"><span class="plg-ov-label">Marketplace</span>
+        <span class="plg-ov-val">${esc(p.marketplace)}<span class="plg-ov-repo">${esc(p.repo || '')}</span></span></div>
+      <div class="plg-ov-row"><span class="plg-ov-label">Plugin</span><span class="plg-ov-val">${esc(p.name || '')}</span></div>
+      <div class="plg-ov-row"><span class="plg-ov-label">Source</span><span class="plg-ov-val">${originBadge(p.origin)}</span></div>
+      <div class="plg-ov-row"><span class="plg-ov-label">Scope</span><span class="plg-ov-val ${esc(p.scope)}">${scopeVal}</span></div>
+      <div class="plg-ov-row"><span class="plg-ov-label">Skills</span><span class="plg-ov-val">${p.skills} skill${p.skills !== 1 ? 's' : ''}</span></div>
+      <div class="plg-ov-row"><span class="plg-ov-label">Version</span><span class="plg-ov-val">${esc(p.version || '')}</span></div>
+      ${p.description ? `<div class="plg-desc">${esc(p.description)}</div>` : ''}
+      <div class="plg-ov-hint">&larr; Pick a skill on the left to read it</div>
+    </div>`;
+}
+
+function selectSkill(key) {
+  activeSkill = key === 'readme' ? 'readme' : parseInt(key, 10);
+  renderPluginList();
+  renderSkillView();
+}
+
+function renderSkillView() {
+  const p = activePluginMeta();
+  const vHead = document.getElementById('v-head');
+  const vBody = document.getElementById('v-body');
+  document.getElementById('v-empty').style.display = 'none';
+  document.getElementById('v-panel').style.display = 'flex';
+  vBody.scrollTop = 0;
+
+  if (activeSkill === 'readme') {
+    vHead.innerHTML = `<div class="v-head-title">README.md</div>
+      <div class="v-head-meta">${esc(p.name)} &nbsp;·&nbsp; ${esc(p.marketplace)}</div>`;
+    vBody.innerHTML = `<div class="md-body fade-in">${renderMd(parseFrontmatter(pluginDetail.readme).body)}</div>`;
+    return;
+  }
+  const s = pluginDetail.skills[activeSkill];
+  const { meta, body } = parseFrontmatter(s.skillMd);
+  const chips = s.extraFiles.length
+    ? `<div class="plg-files-label">Bundled files — click to open in your editor:</div>
+       <div class="plg-files">${s.extraFiles.map(f =>
+        `<button class="plg-chip" data-rel="${esc(f.rel)}" onclick="openPlgFile(this)">${esc(f.rel.split('/').pop())}</button>`).join('')}</div>`
+    : '';
+  vHead.innerHTML = `<div class="v-head-title">${esc(meta.name || s.name)}</div>
+    <div class="v-head-meta">${esc(p.name)} &nbsp;·&nbsp; ${esc(p.marketplace)}</div>`;
+  vBody.innerHTML = `<div class="fade-in"><div class="md-body">${renderMd(body) || '<em>No SKILL.md</em>'}</div>${chips}</div>`;
+}
+
+async function openPlgFile(btn) {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Opening…';
+  try {
+    const r = await fetch('/api/plugins/open', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: activePlugin, rel: btn.dataset.rel }),
+    }).then(r => r.json());
+    if (r.error) throw new Error(r.error);
+    btn.textContent = 'Opened ✓';
+  } catch (e) { btn.textContent = 'Error'; }
+  setTimeout(() => { btn.disabled = false; btn.textContent = orig; }, 1600);
 }
 
 // ── Viewer ───────────────────────────────────────────────────────────
@@ -1381,6 +1619,7 @@ document.getElementById('project').addEventListener('change', e => { projectFilt
 document.getElementById('btn-theme').addEventListener('click', toggleTheme);
 document.getElementById('vt-chats').addEventListener('click', () => switchView('chats'));
 document.getElementById('vt-memory').addEventListener('click', () => switchView('memory'));
+document.getElementById('vt-plugins').addEventListener('click', () => switchView('plugins'));
 document.getElementById('cleanup-forever').addEventListener('change', e => {
   const num = document.getElementById('cleanup-days');
   num.disabled = e.target.checked;
@@ -1395,6 +1634,9 @@ refreshBtn.addEventListener('click', async () => {
     renderProjectOptions();
     if (view === 'memory') {
       try { memProjects = await fetch('/api/memory').then(r => r.json()); memProjectsLoaded = true; } catch {}
+    }
+    if (view === 'plugins') {
+      try { pluginItems = await fetch('/api/plugins').then(r => r.json()); pluginsLoaded = true; } catch {}
     }
     renderList();
   } finally { refreshBtn.classList.remove('spinning'); }

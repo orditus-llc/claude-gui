@@ -6,7 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const readline = require('readline');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 
 // Default port differs per environment so a Windows instance and a WSL instance
 // can both run at once. WSL2 forwards localhost to Windows, so sharing a default
@@ -16,14 +16,25 @@ const PORT = Number.isInteger(parseInt(process.argv[2])) ? parseInt(process.argv
 const HOME = os.homedir();
 const CLAUDE_PROJECTS = path.join(HOME, '.claude', 'projects');
 const SETTINGS_PATH = path.join(HOME, '.claude', 'settings.json');
+const PLUGINS_DIR = path.join(HOME, '.claude', 'plugins');
+const INSTALLED_PLUGINS = path.join(PLUGINS_DIR, 'installed_plugins.json');
+const KNOWN_MARKETPLACES = path.join(PLUGINS_DIR, 'known_marketplaces.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_PATH = path.join(__dirname, 'claude-gui-data.json');
+
+// WSL must be detected as Linux specifically — Windows also sets WSLENV when
+// interop is enabled, so that var alone would misclassify native Windows as WSL.
+const IS_WSL = process.platform === 'linux' &&
+  !!(process.env.WSL_DISTRO_NAME || fs.existsSync('/proc/sys/fs/binfmt_misc/WSLInterop'));
 
 function loadData() {
   try { return JSON.parse(fs.readFileSync(DATA_PATH, 'utf8')); } catch { return {}; }
 }
 function saveData(obj) {
   fs.writeFileSync(DATA_PATH, JSON.stringify(obj, null, 2));
+}
+function readJson(p) {
+  try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return {}; }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -134,6 +145,218 @@ function deleteMemoryFile(projectDir, name) {
   if (!fs.existsSync(fp)) throw new Error('file not found');
   fs.unlinkSync(fp);
   return { ok: true };
+}
+
+// ── Plugins (~/.claude/plugins) ───────────────────────────────────────
+// Source of truth is installed_plugins.json — each key is "<plugin>@<marketplace>"
+// mapping to an array of installs (one per scope/project). Content is read from
+// each install's pinned cache dir (installPath), never from a user's dev clone.
+const TEXT_EXT = new Set(['md','txt','py','js','ts','jsx','tsx','sh','bash','json','yaml','yml','toml','r','rmd','sql','css','html','xml','xsd','csv','ini','cfg','env','rb','go','rs','c','h','cpp','java','lua','pl']);
+
+function fileKind(name) {
+  if (name.toLowerCase().endsWith('.md')) return 'md';
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  return TEXT_EXT.has(ext) ? 'code' : 'binary';
+}
+
+// "Official" = Anthropic's official marketplace only (claude-plugins-official).
+// Other Anthropic repos (e.g. anthropics/skills) are NOT the official marketplace.
+function classifyOrigin(repo, marketplace) {
+  const r = String(repo || '').toLowerCase();
+  if (marketplace === 'claude-plugins-official' || r === 'anthropics/claude-plugins-official') return 'official';
+  return 'third-party';
+}
+
+function componentCounts(installPath) {
+  const c = { skills: 0, commands: 0, agents: 0 };
+  for (const k of Object.keys(c)) {
+    try {
+      const ents = fs.readdirSync(path.join(installPath, k), { withFileTypes: true });
+      c[k] = k === 'skills' ? ents.filter(e => e.isDirectory()).length : ents.filter(e => e.isFile() || e.isDirectory()).length;
+    } catch {}
+  }
+  return c;
+}
+
+function loadPlugins() {
+  const installed = readJson(INSTALLED_PLUGINS);
+  const markets = readJson(KNOWN_MARKETPLACES);
+  const settings = readJson(SETTINGS_PATH);
+  const enabledMap = settings.enabledPlugins || {};
+  const out = [];
+  for (const key of Object.keys(installed.plugins || {})) {
+    const at = key.lastIndexOf('@');
+    const pname = at >= 0 ? key.slice(0, at) : key;
+    const marketplace = at >= 0 ? key.slice(at + 1) : '';
+    const repo = (markets[marketplace] && markets[marketplace].source) ? markets[marketplace].source.repo : '';
+    const arr = installed.plugins[key];
+    if (!Array.isArray(arr)) continue;
+    arr.forEach((entry, idx) => {
+      const meta = readJson(path.join(entry.installPath, '.claude-plugin', 'plugin.json'));
+      const counts = componentCounts(entry.installPath);
+      out.push({
+        id: `${key}::${idx}`,
+        key, name: meta.name || pname, marketplace, repo,
+        description: meta.description || '',
+        scope: entry.scope || 'user',
+        projectPath: entry.projectPath || '',
+        version: String(entry.version || '').slice(0, 12),
+        origin: classifyOrigin(repo, marketplace),
+        enabled: key in enabledMap ? !!enabledMap[key] : null,
+        skills: counts.skills, commands: counts.commands, agents: counts.agents,
+        installedAt: entry.installedAt || '', lastUpdated: entry.lastUpdated || '',
+      });
+    });
+  }
+  out.sort((a, b) => a.name.localeCompare(b.name) || a.scope.localeCompare(b.scope));
+  return out;
+}
+
+function findPluginEntry(id) {
+  if (typeof id !== 'string') throw new Error('invalid id');
+  const sep = id.lastIndexOf('::');
+  if (sep < 0) throw new Error('invalid id');
+  const key = id.slice(0, sep);
+  const idx = parseInt(id.slice(sep + 2), 10);
+  const arr = (readJson(INSTALLED_PLUGINS).plugins || {})[key];
+  if (!Array.isArray(arr) || !arr[idx] || !arr[idx].installPath) throw new Error('plugin not found');
+  return arr[idx];
+}
+
+function listFilesRel(dir, root) {
+  const out = [];
+  const walk = (d) => {
+    let ents;
+    try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+    for (const e of ents) {
+      if (out.length >= 500 || e.name.startsWith('.')) continue;
+      const fp = path.join(d, e.name);
+      if (e.isDirectory()) walk(fp);
+      else if (e.isFile()) {
+        let size = 0; try { size = fs.statSync(fp).size; } catch {}
+        out.push({ rel: path.relative(root, fp).split(path.sep).join('/'), size, kind: fileKind(e.name) });
+      }
+    }
+  };
+  walk(dir);
+  return out;
+}
+
+function readPluginSkills(id) {
+  const root = findPluginEntry(id).installPath;
+  const result = { readme: '', skills: [], commands: [], agents: [] };
+  for (const r of ['README.md', 'readme.md']) {
+    const p = path.join(root, r);
+    try { if (fs.statSync(p).size < 200000) { result.readme = fs.readFileSync(p, 'utf8'); break; } } catch {}
+  }
+  let dirs = [];
+  try { dirs = fs.readdirSync(path.join(root, 'skills'), { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort(); } catch {}
+  for (const name of dirs) {
+    const sdir = path.join(root, 'skills', name);
+    let skillMd = ''; try { skillMd = fs.readFileSync(path.join(sdir, 'SKILL.md'), 'utf8'); } catch {}
+    const extraFiles = listFilesRel(sdir, root).filter(f => path.basename(f.rel) !== 'SKILL.md');
+    result.skills.push({ name, skillMd, extraFiles });
+  }
+  for (const k of ['commands', 'agents']) {
+    try { result[k] = fs.readdirSync(path.join(root, k), { withFileTypes: true }).filter(e => e.isFile()).map(e => e.name); } catch {}
+  }
+  return result;
+}
+
+function pluginFileAbsPath(id, rel) {
+  if (typeof rel !== 'string' || rel.includes('\0')) throw new Error('invalid path');
+  const root = fs.realpathSync(path.resolve(findPluginEntry(id).installPath));
+  const fp = path.resolve(root, rel);
+  if (fp !== root && !fp.startsWith(root + path.sep)) throw new Error('invalid path');  // confine to the install dir
+  if (!fs.existsSync(fp)) throw new Error('file not found');
+  const real = fs.realpathSync(fp);  // a symlink inside the dir must not point outside it
+  if (real !== root && !real.startsWith(root + path.sep)) throw new Error('invalid path');
+  return real;
+}
+
+// Open a bundled file in the native "How do you want to open this file?" chooser.
+// Two Windows quirks shape this:
+//   1. The chooser (OpenAs_RunDLL) no-ops on WSL UNC paths (\\wsl.localhost\…),
+//      so under WSL we copy the file into a Windows-local temp dir first.
+//   2. OpenAs_RunDLL mis-parses any path containing a SPACE (e.g. a "C:\Users\
+//      Daniel Burkhalter\…" home) — it launches but shows only a ghost taskbar
+//      entry, no dialog. So we always convert to the 8.3 short path (no spaces)
+//      before invoking it. (This is why WSL appeared to work: %TEMP% resolved to
+//      a short, space-free path by chance.)
+// Mac/Linux just open the default app for the type.
+const RUNDLL = IS_WSL ? '/mnt/c/Windows/System32/rundll32.exe' : 'rundll32.exe';
+const OPENAS = 'shell32.dll,OpenAs_RunDLL';
+const NOWIN = { windowsHide: true };  // suppress the console-window flash on Windows
+let winTempDir = null;  // WSL path to a Windows-local scratch dir, resolved once
+
+// All OS-launch commands use execFile with an argument array (never a shell
+// string) so a malicious plugin filename can't inject shell commands.
+function ensureWinTemp(cb) {
+  if (winTempDir) return cb(winTempDir);
+  execFile('/mnt/c/Windows/System32/cmd.exe', ['/c', 'echo %TEMP%'], NOWIN, (e, out) => {
+    const win = (out || '').trim();
+    if (e || !win) return cb(null);
+    execFile('wslpath', ['-u', win], (e2, out2) => {
+      const base = (out2 || '').trim();
+      if (e2 || !base) return cb(null);
+      const dir = path.join(base, 'claude-gui-open');
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });  // clear stale copies once per run
+        fs.mkdirSync(dir, { recursive: true });
+        winTempDir = dir; cb(dir);
+      } catch { cb(null); }
+    });
+  });
+}
+
+// Spawn a launcher and report cb(err) on *spawn*, not on exit — the OpenAs
+// chooser keeps rundll32 alive until the dialog is dismissed, so waiting for
+// exit would hang the HTTP request until the user picks an app.
+// NOTE: no windowsHide here — rundll32's own window IS the "Open with" dialog,
+// so hiding it would leave only a taskbar icon with no visible chooser.
+function spawnLauncher(file, args, cb) {
+  let done = false;
+  const finish = (err) => { if (!done) { done = true; cb(err); } };
+  try {
+    const child = execFile(file, args);
+    child.on('error', finish);            // e.g. launcher binary not found
+    child.on('spawn', () => finish(null));
+    child.unref();
+  } catch (e) { finish(e); }
+}
+
+// Resolve a Windows path to its 8.3 short form (no spaces) via the FileSystemObject,
+// then hand it to the chooser. Falls back to the long path if 8.3 is unavailable.
+function openWithChooser(winPath, cb) {
+  const script = `(New-Object -ComObject Scripting.FileSystemObject).GetFile('${winPath.replace(/'/g, "''")}').ShortPath`;
+  execFile('powershell.exe', ['-NoProfile', '-Command', script], NOWIN, (e, out) => {
+    const short = (out || '').trim() || winPath;
+    spawnLauncher(RUNDLL, [OPENAS, short], cb);
+  });
+}
+
+// Opens absPath in the OS "Open with" chooser (Windows) or default app. cb(err)
+// reports whether the launcher started, so the UI doesn't claim a false success.
+function openExternal(absPath, cb = () => {}) {
+  if (IS_WSL) {
+    // The chooser no-ops on \\wsl.localhost\ UNC paths, so copy to a local C: dir first.
+    ensureWinTemp((dir) => {
+      if (!dir) return spawnLauncher('xdg-open', [absPath], cb);
+      const dest = path.join(dir, path.basename(absPath));
+      try { fs.copyFileSync(absPath, dest); } catch (e) { return cb(e); }
+      execFile('wslpath', ['-w', dest], (e, out) => {
+        const win = (out || '').trim();
+        if (e || !win) return cb(e || new Error('path conversion failed'));
+        openWithChooser(win, cb);
+      });
+    });
+  } else if (process.platform === 'win32') {
+    openWithChooser(absPath, cb);
+  } else if (process.platform === 'darwin') {
+    spawnLauncher('open', [absPath], cb);
+  } else {
+    spawnLauncher('xdg-open', [absPath], cb);
+  }
 }
 
 // ── Conversation messages ─────────────────────────────────────────────
@@ -346,21 +569,42 @@ const server = http.createServer(async (req, res) => {
     } catch (e) { return jsonResponse(res, { error: e.message }, 400); }
   }
 
+  // Plugins: list installed plugins
+  if (method === 'GET' && pathname === '/api/plugins') {
+    try { return jsonResponse(res, loadPlugins()); }
+    catch (e) { return jsonResponse(res, { error: e.message }, 500); }
+  }
+  // Plugins: skills + bundled-file manifest for one install
+  if (method === 'GET' && pathname === '/api/plugins/skills') {
+    const id = new URL(req.url, `http://localhost:${PORT}`).searchParams.get('id') || '';
+    try { return jsonResponse(res, readPluginSkills(id)); }
+    catch (e) { return jsonResponse(res, { error: e.message }, 400); }
+  }
+  // Plugins: open a bundled file in the user's editor (OS "Open with")
+  if (method === 'POST' && pathname === '/api/plugins/open') {
+    try {
+      const body = await readBody(req);
+      const fp = pluginFileAbsPath(body.id || '', body.rel || '');
+      await new Promise((resolve, reject) => openExternal(fp, (err) => err ? reject(err) : resolve()));
+      return jsonResponse(res, { ok: true });
+    } catch (e) { return jsonResponse(res, { error: e.message }, 500); }
+  }
+
   res.writeHead(404); res.end('Not found');
 });
 
 function openBrowser(url) {
-  // WSL: use Windows cmd.exe to open in the Windows default browser
-  if (process.env.WSL_DISTRO_NAME || process.env.WSLENV || fs.existsSync('/proc/sys/fs/binfmt_misc/WSLInterop')) {
-    exec(`/mnt/c/Windows/System32/cmd.exe /c start "" "${url}"`, err => {
-      if (err) exec(`xdg-open "${url}"`, () => {});
+  // url is our own http://localhost:<port> (port is an int), so it's safe to pass.
+  if (IS_WSL) {  // use Windows cmd.exe to open in the Windows default browser
+    execFile('/mnt/c/Windows/System32/cmd.exe', ['/c', 'start', '', url], NOWIN, err => {
+      if (err) execFile('xdg-open', [url], () => {});
     });
   } else if (process.platform === 'win32') {
-    exec(`cmd /c start "" "${url}"`);
+    execFile('cmd', ['/c', 'start', '', url], NOWIN, () => {});
   } else if (process.platform === 'darwin') {
-    exec(`open "${url}"`);
+    execFile('open', [url], () => {});
   } else {
-    exec(`xdg-open "${url}"`, () => {});
+    execFile('xdg-open', [url], () => {});
   }
 }
 
