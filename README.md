@@ -68,6 +68,4 @@ MIT
 
 ## Future Features (To Do)
 
-- [ ] Add subagent sessions
-- [ ] Archive (reversible delete)
-- [ ] Compress old conversations
+See **[FEATURES.md](FEATURES.md)** for the roadmap and proposed changes.
