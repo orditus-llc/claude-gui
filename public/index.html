@@ -260,6 +260,17 @@
       text-overflow: ellipsis; direction: rtl; text-align: left;
     }
 
+    .s-snippet {
+      font-size: 10.5px; color: var(--text2); line-height: 1.45;
+      margin-bottom: 5px; overflow: hidden;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow-wrap: anywhere; word-break: break-word;   /* never let a long unbroken run overflow the card */
+    }
+    .s-snippet mark {
+      background: var(--accent-lo); color: var(--accent-hi);
+      border-radius: 2px; padding: 0 1px; font-weight: 600;
+    }
+
     .s-meta {
       display: flex; align-items: center; gap: 4px; row-gap: 2px;
       font-size: 11px; color: var(--text2); margin-bottom: 6px; flex-wrap: wrap;
@@ -652,7 +663,7 @@
       <div class="sb-row2">
         <div class="search-wrap">
           <svg class="search-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          <input class="search" id="search" type="text" placeholder="Search title, path, or ID…" autocomplete="off" spellcheck="false">
+          <input class="search" id="search" type="text" placeholder="Search chats…" autocomplete="off" spellcheck="false">
         </div>
         <select class="sort" id="sort">
           <option value="lastTs">Last active</option>
@@ -723,6 +734,8 @@ let allSessions = [];
 let sortKey = 'lastTs';
 let activeId = null;
 let projectFilter = '';
+let contentMatches = null;   // /api/search result: { id: snippet }; null = no content search active
+let searchTimer = null;
 let ctxMax = 200000;
 let view = 'chats';
 let memProjects = [];
@@ -904,6 +917,14 @@ const COPY_SVG = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" st
 const DEL_SVG  = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
 const STAR_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
 
+// Escape around the match so the <mark> survives esc() and snippet text can't inject HTML.
+function highlightSnippet(snip) {
+  const q = (document.getElementById('search').value || '').trim();
+  const i = q ? snip.toLowerCase().indexOf(q.toLowerCase()) : -1;
+  if (i < 0) return esc(snip);
+  return esc(snip.slice(0, i)) + '<mark>' + esc(snip.slice(i, i + q.length)) + '</mark>' + esc(snip.slice(i + q.length));
+}
+
 function renderCard(s) {
   const title   = s.title || 'Untitled session';
   const path    = s.cwd || s.projectDir;
@@ -911,12 +932,14 @@ function renderCard(s) {
   const cmd     = s.cwd ? `cd "${s.cwd}" && claude --resume ${s.id}` : `claude --resume ${s.id}`;
   const isActive = s.id === activeId;
   const isPinned = pinned.has(s.id);
+  const snippet = contentMatches ? contentMatches[s.id] : undefined;
 
   return `<div class="session${isActive ? ' active' : ''}" id="s-${s.id}" data-id="${s.id}">
     <div class="s-top">
       <span class="s-title${s.title ? '' : ' untitled'}">${esc(title)}</span>
     </div>
     <div class="s-path" title="${esc(path)}">${esc(path)}</div>
+    ${snippet ? `<div class="s-snippet">${highlightSnippet(snippet)}</div>` : ''}
     <div class="s-meta">
       <span>${s.msgCount}m</span>
       <span class="dot">·</span>
@@ -957,7 +980,8 @@ function getFiltered() {
   if (q) result = result.filter(s =>
     (s.title||'').toLowerCase().includes(q) ||
     (s.cwd||'').toLowerCase().includes(q) ||
-    s.id.startsWith(q)
+    s.id.startsWith(q) ||
+    (contentMatches && contentMatches[s.id] !== undefined)
   );
   return [...result].sort((a,b) => {
     const pa = pinned.has(a.id), pb = pinned.has(b.id);
@@ -1217,7 +1241,7 @@ async function switchView(v) {
   document.getElementById('sort').style.display = isChats ? '' : 'none';
   document.querySelector('.sb-row3').style.display = isChats ? '' : 'none';
   document.getElementById('search').placeholder =
-    v === 'memory' ? 'Search project path…' : v === 'plugins' ? 'Search plugins…' : 'Search title, path, or ID…';
+    v === 'memory' ? 'Search project path…' : v === 'plugins' ? 'Search plugins…' : 'Search chats…';
   showEmpty();
   if (v === 'memory' && !memProjectsLoaded) {
     document.getElementById('list').innerHTML = '<div class="state"><div class="spinner"></div>Loading…</div>';
@@ -1613,7 +1637,30 @@ async function saveSettings() {
 // ── Initialise ───────────────────────────────────────────────────────
 initTheme();
 
-document.getElementById('search').addEventListener('input', renderList);
+// Title/path/ID filtering happens instantly on each keystroke; content search
+// is debounced to the server. Stale content matches stay visible until the new
+// results land, so the list doesn't flicker mid-word.
+document.getElementById('search').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  const q = (document.getElementById('search').value || '').trim();
+  if (view === 'chats') {
+    if (!q) {
+      contentMatches = null;
+    } else {
+      searchTimer = setTimeout(async () => {
+        try {
+          const matches = await fetch('/api/search?q=' + encodeURIComponent(q)).then(r => r.json());
+          // Only apply if the box still holds this query (guards out-of-order responses)
+          if ((document.getElementById('search').value || '').trim() === q) {
+            contentMatches = matches;
+            renderList();
+          }
+        } catch {}
+      }, 200);
+    }
+  }
+  renderList();
+});
 document.getElementById('sort').addEventListener('change', e => { sortKey = e.target.value; renderList(); });
 document.getElementById('project').addEventListener('change', e => { projectFilter = e.target.value; renderList(); });
 document.getElementById('btn-theme').addEventListener('click', toggleTheme);

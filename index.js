@@ -52,9 +52,20 @@ function jsonResponse(res, data, status = 200) {
 }
 
 // ── Session metadata ──────────────────────────────────────────────────
+// Gathers only spoken text: user prompts and assistant prose. Tool results
+// arrive as user-role tool_result parts and tool calls as assistant tool_use
+// parts — both are top-level types other than 'text', so both are excluded
+// and content search matches what was *said*, not every file Claude read.
+function collectSpokenText(content, out) {
+  if (typeof content === 'string') { if (content) out.push(content); return; }
+  if (!Array.isArray(content)) return;
+  for (const p of content) if (p && p.type === 'text' && p.text) out.push(p.text);
+}
+
 async function parseSession(filePath, projectDir) {
   const { size } = fs.statSync(filePath);
   const s = { id: path.basename(filePath, '.jsonl'), projectDir, title: '', cwd: '', firstTs: '', lastTs: '', msgCount: 0, summary: '', sizeBytes: size, ctxTokens: 0 };
+  const spoken = [];
   await new Promise((resolve) => {
     const rl = readline.createInterface({ input: fs.createReadStream(filePath), crlfDelay: Infinity });
     rl.on('line', (line) => {
@@ -62,9 +73,13 @@ async function parseSession(filePath, projectDir) {
       let d; try { d = JSON.parse(line); } catch { return; }
       switch (d.type) {
         case 'ai-title':   if (d.aiTitle) s.title = d.aiTitle; break;
-        case 'user':       s.msgCount++; if (!s.cwd && d.cwd) s.cwd = d.cwd; if (!s.firstTs && d.timestamp) s.firstTs = d.timestamp; if (d.timestamp) s.lastTs = d.timestamp; break;
+        case 'user':
+          s.msgCount++; if (!s.cwd && d.cwd) s.cwd = d.cwd; if (!s.firstTs && d.timestamp) s.firstTs = d.timestamp; if (d.timestamp) s.lastTs = d.timestamp;
+          if (!d.isMeta && d.message) collectSpokenText(d.message.content, spoken);  // isMeta = harness-injected, not the user
+          break;
         case 'assistant':
           if (d.timestamp) s.lastTs = d.timestamp;
+          if (d.message) collectSpokenText(d.message.content, spoken);
           if (d.message && d.message.usage) {
             const u = d.message.usage;
             s.ctxTokens = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0)
@@ -76,7 +91,35 @@ async function parseSession(filePath, projectDir) {
     });
     rl.on('close', resolve); rl.on('error', resolve);
   });
+  // Held server-side for /api/search; stripped from /api/sessions responses.
+  s.searchText = spoken.join('\n');
+  s.searchLower = s.searchText.toLowerCase();
   return s;
+}
+
+// Sessions as sent to the client — without the in-memory search text.
+function publicSessions(list) {
+  return list.map(({ searchText, searchLower, ...rest }) => rest);
+}
+
+// Strip decoration that renders as an unbreakable line when whitespace is
+// collapsed: box-drawing/block glyphs (tables, dividers) and long runs of a
+// repeated punctuation char (---- ==== ____ ....). Keeps real words intact.
+function cleanSnippet(text) {
+  return text
+    .replace(/[─-▟]+/g, ' ')      // box-drawing + block element glyphs
+    .replace(/([^\w\s])\1{3,}/g, '$1')      // 4+ repeats of one punctuation → single
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// "…context MATCH context…" excerpt around the first hit. Cleaned of table/divider
+// art so it reads as text. Widen the raw window since cleaning removes characters.
+function makeSnippet(text, idx, qLen) {
+  const start = Math.max(0, idx - 80);
+  const end = Math.min(text.length, idx + qLen + 160);
+  const snip = cleanSnippet(text.slice(start, end));
+  return (start > 0 ? '…' : '') + snip + (end < text.length ? '…' : '');
 }
 
 async function loadSessions() {
@@ -469,7 +512,23 @@ const server = http.createServer(async (req, res) => {
   if (method === 'GET' && pathname === '/api/sessions') {
     try {
       if (!cache) cache = await loadSessions();
-      return jsonResponse(res, cache);
+      return jsonResponse(res, publicSessions(cache));
+    } catch (e) { return jsonResponse(res, { error: e.message }, 500); }
+  }
+
+  // Content search over user/assistant message text.
+  // Returns { <sessionId>: <snippet> } for every session containing the query.
+  if (method === 'GET' && pathname === '/api/search') {
+    try {
+      const q = (new URL(req.url, `http://localhost:${PORT}`).searchParams.get('q') || '').trim().toLowerCase();
+      if (!q) return jsonResponse(res, {});
+      if (!cache) cache = await loadSessions();
+      const out = {};
+      for (const s of cache) {
+        const i = s.searchLower.indexOf(q);
+        if (i >= 0) out[s.id] = makeSnippet(s.searchText, i, q.length);
+      }
+      return jsonResponse(res, out);
     } catch (e) { return jsonResponse(res, { error: e.message }, 500); }
   }
 
@@ -482,7 +541,7 @@ const server = http.createServer(async (req, res) => {
 
   // Force refresh session list
   if (method === 'POST' && pathname === '/api/refresh') {
-    try { cache = await loadSessions(); return jsonResponse(res, cache); }
+    try { cache = await loadSessions(); return jsonResponse(res, publicSessions(cache)); }
     catch (e) { return jsonResponse(res, { error: e.message }, 500); }
   }
 
