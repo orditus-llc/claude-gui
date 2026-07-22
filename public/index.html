@@ -776,7 +776,7 @@ let memFiles = [];
 let pluginItems = [];
 let pluginsLoaded = false;
 let activePlugin = null;
-const pendingDeletes = {};
+const pendingDeletes = Object.create(null);
 let pinned = new Set();
 function sessionKey(s) { return s.key || s.id; }
 function savePins() {
@@ -1111,23 +1111,32 @@ function bindListHandlers() {
       const provider = btn.dataset.provider || 'claude';
       if (pendingDeletes[key]) {
         clearTimeout(pendingDeletes[key]); delete pendingDeletes[key];
+
+        // Remove the card before the filesystem operation completes, so a
+        // delayed response cannot leave another delete button stuck on "Delete?".
+        allSessions = allSessions.filter(s => sessionKey(s) !== key);
+        if (contentMatches) delete contentMatches[key];
+        if (pinned.delete(key)) savePins();
+        if (activeId === key) { activeId = null; showEmpty(); }
+        renderProjectOptions();
+        renderList();
+
         fetch(`/api/sessions/${id}?provider=${encodeURIComponent(provider)}`, { method: 'DELETE' })
           .then(async r => ({ ok: r.ok, data: await r.json() }))
           .then(({ ok, data }) => {
-          if (ok && data.success) {
-            allSessions = allSessions.filter(s => sessionKey(s) !== key);
-            if (pinned.delete(key)) savePins();
-            if (activeId === key) { activeId = null; showEmpty(); }
-            renderProjectOptions();
-            renderList();
-          } else {
-            btn.textContent = 'Failed';
-            btn.title = data.error || 'Delete failed';
-            setTimeout(() => { btn.innerHTML = DEL_SVG; btn.classList.remove('confirming'); }, 2000);
-          }
+          if (ok && data.success) return;
+          throw new Error(data.error || 'Delete failed');
         }).catch(() => {
-          btn.textContent = 'Failed';
-          setTimeout(() => { btn.innerHTML = DEL_SVG; btn.classList.remove('confirming'); }, 2000);
+          // The request may have completed despite a lost response. Reload to
+          // reconcile the visible list with the actual filesystem state.
+          return fetch('/api/sessions')
+            .then(r => r.ok ? r.json() : Promise.reject())
+            .then(sessions => {
+              allSessions = sessions;
+              renderProjectOptions();
+              renderList();
+            })
+            .catch(() => {});
         });
       } else {
         btn.innerHTML = 'Delete?'; btn.classList.add('confirming');
