@@ -3,7 +3,7 @@
 Roadmap and proposed changes for claude-gui. The README links here instead of
 carrying the list inline.
 
-- [ ] Add subagent sessions
+- [ ] Add an auxiliary/subagent session browser for Claude Code and Codex
 - [ ] Archive (reversible delete)
 - [ ] Compress old conversations
 - [ ] Replace "Open With" with in-app file viewer ([details](#replace-open-with-with-in-app-file-viewer))

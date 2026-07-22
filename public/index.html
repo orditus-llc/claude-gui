@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Claude Sessions</title>
+  <title>Agent Sessions</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -157,9 +157,10 @@
 
     .count { font-size: 11px; color: var(--text3); margin-left: auto; white-space: nowrap; flex-shrink: 0; }
 
-    .sb-row3 { margin-top: 6px; }
+    .sb-row3 { margin-top: 6px; display: flex; align-items: center; gap: 6px; }
     .project-select {
-      width: 100%;
+      flex: 1;
+      min-width: 0;
       height: 28px;
       background: var(--surface);
       border: 1px solid var(--border);
@@ -171,6 +172,17 @@
       cursor: pointer;
     }
     .project-select:focus { border-color: var(--accent); }
+    .provider-select {
+      width: 88px; height: 28px; flex-shrink: 0;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 5px;
+      color: var(--text2); font-size: 11px; padding: 0 6px; outline: none; cursor: pointer;
+    }
+    .provider-select:focus { border-color: var(--accent); }
+    .aux-toggle {
+      display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+      color: var(--text3); font-size: 10.5px; cursor: pointer; white-space: nowrap;
+    }
+    .aux-toggle input { margin: 0; accent-color: var(--accent); }
 
     .icon-btn {
       background: none;
@@ -227,6 +239,13 @@
       flex: 1;
     }
     .s-title.untitled { color: var(--text3); font-style: italic; }
+    .s-provider {
+      flex-shrink: 0; border: 1px solid var(--border); border-radius: 999px;
+      color: var(--text3); font-size: 9px; font-weight: 600; line-height: 15px;
+      padding: 0 6px; text-transform: uppercase; letter-spacing: 0.35px;
+    }
+    .s-provider.claude { color: #d97757; border-color: #d97757; background: rgba(217, 119, 87, 0.12); }
+    .s-provider.codex { color: #3b82f6; border-color: #3b82f6; background: rgba(59, 130, 246, 0.12); }
 
     .s-actions { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
     .s-actions-meta { margin-left: auto; display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
@@ -465,6 +484,7 @@
 
     /* Memory files */
     .mem-file { margin-bottom: 22px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .mem-project-path { flex: 1; min-width: 0; margin-bottom: 0; }
     .mem-file-head { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--surface); border-bottom: 1px solid var(--border); }
     .mem-name { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--text1); flex-shrink: 0; }
     .mem-badge { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 7px; border-radius: 10px; background: var(--accent-lo); color: var(--accent); flex-shrink: 0; }
@@ -512,6 +532,8 @@
     .plg-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 7px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; }
     .plg-badge.official { background: var(--src-official-lo); color: var(--src-official); }
     .plg-badge.third { background: var(--src-third-lo); color: var(--src-third); }
+    .plg-badge.local { background: var(--accent-lo); color: var(--accent); }
+    .plg-badges { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
 
     /* Plugins — accordion skill rows (nested under expanded card) */
     .plg-skills { margin: 3px 0 4px 11px; padding-left: 9px; border-left: 1px solid var(--border2); }
@@ -627,7 +649,7 @@
             <path d="M12 2 22 12 12 22 2 12Z" fill="#1DB46B" opacity="0.5"/>
             <path d="M12 7 17 12 12 17 7 12Z" fill="#1DB46B"/>
           </svg>
-          Claude Sessions
+          Agent Sessions
         </div>
         <div class="view-toggle">
           <button class="vt-btn active" id="vt-chats">Chats</button>
@@ -677,6 +699,14 @@
         <select class="project-select" id="project">
           <option value="">All projects</option>
         </select>
+        <select class="provider-select" id="provider" title="Filter by assistant">
+          <option value="">All</option>
+          <option value="claude">Claude</option>
+          <option value="codex">Codex</option>
+        </select>
+        <!-- Future auxiliary/subagent session browser:
+        <label class="aux-toggle"><input type="checkbox" id="show-aux"> Aux</label>
+        -->
       </div>
     </div>
     <div class="sb-list" id="list">
@@ -734,6 +764,7 @@ let allSessions = [];
 let sortKey = 'lastTs';
 let activeId = null;
 let projectFilter = '';
+let providerFilter = '';
 let contentMatches = null;   // /api/search result: { id: snippet }; null = no content search active
 let searchTimer = null;
 let ctxMax = 200000;
@@ -747,6 +778,7 @@ let pluginsLoaded = false;
 let activePlugin = null;
 const pendingDeletes = {};
 let pinned = new Set();
+function sessionKey(s) { return s.key || s.id; }
 function savePins() {
   fetch('/api/pins', {
     method: 'PUT',
@@ -832,7 +864,7 @@ function fmtTime(ts) {
 }
 
 function projName(s) {
-  if (s.cwd) return s.cwd.split('/').filter(Boolean).pop() || s.cwd;
+  if (s.cwd) return s.cwd.split(/[\\/]/).filter(Boolean).pop() || s.cwd;
   return s.projectDir.replace(/^-+/,'').split('-').pop() || s.projectDir;
 }
 
@@ -929,14 +961,21 @@ function renderCard(s) {
   const title   = s.title || 'Untitled session';
   const path    = s.cwd || s.projectDir;
   const size    = fmtSize(s.sizeBytes);
-  const cmd     = s.cwd ? `cd "${s.cwd}" && claude --resume ${s.id}` : `claude --resume ${s.id}`;
-  const isActive = s.id === activeId;
-  const isPinned = pinned.has(s.id);
-  const snippet = contentMatches ? contentMatches[s.id] : undefined;
+  const provider = s.provider || 'claude';
+  const key = sessionKey(s);
+  const cmd = provider === 'codex'
+    ? `codex resume ${s.id}`
+    : s.cwd ? `cd "${s.cwd}" && claude --resume ${s.id}` : `claude --resume ${s.id}`;
+  const isActive = key === activeId;
+  const isPinned = pinned.has(key);
+  const snippet = contentMatches ? contentMatches[key] : undefined;
+  const maxCtx = s.contextWindow || ctxMax;
+  const ctxRatio = maxCtx ? s.ctxTokens / maxCtx : 0;
 
-  return `<div class="session${isActive ? ' active' : ''}" id="s-${s.id}" data-id="${s.id}">
+  return `<div class="session${isActive ? ' active' : ''}" id="s-${esc(key)}" data-id="${esc(key)}">
     <div class="s-top">
       <span class="s-title${s.title ? '' : ' untitled'}">${esc(title)}</span>
+      <span class="s-provider ${esc(provider)}">${esc(provider)}</span>
     </div>
     <div class="s-path" title="${esc(path)}">${esc(path)}</div>
     ${snippet ? `<div class="s-snippet">${highlightSnippet(snippet)}</div>` : ''}
@@ -944,11 +983,13 @@ function renderCard(s) {
       <span>${s.msgCount}m</span>
       <span class="dot">·</span>
       <span>${size}</span>
-      ${s.ctxTokens ? `<span class="dot">·</span><span class="s-ctx${(r => r >= 0.8 ? ' warn' : r >= 0.5 ? ' elevated' : '')(s.ctxTokens / ctxMax)}" title="Context at last turn: ${s.ctxTokens.toLocaleString()} / ${ctxMax.toLocaleString()} tokens">ctx ${fmtK(s.ctxTokens)} (${Math.round(s.ctxTokens / ctxMax * 100)}%)</span>` : ''}
+      ${s.archived ? '<span class="dot">·</span><span>archived</span>' : ''}
+      ${s.isSubagent ? `<span class="dot">·</span><span>${esc(s.source || 'aux')}</span>` : ''}
+      ${s.ctxTokens ? `<span class="dot">·</span><span class="s-ctx${ctxRatio >= 0.8 ? ' warn' : ctxRatio >= 0.5 ? ' elevated' : ''}" title="Last turn: ${s.ctxTokens.toLocaleString()} / ${maxCtx.toLocaleString()} tokens">ctx ${fmtK(s.ctxTokens)} (${Math.round(ctxRatio * 100)}%)</span>` : ''}
       <div class="s-actions-meta">
         <div class="s-dates" title="Started: ${esc(s.firstTs)}\nLast: ${esc(s.lastTs)}">${fmtDateRange(s)}</div>
-        <button class="btn-pin${isPinned ? ' pinned' : ''}" data-id="${s.id}" title="Pin to top">${STAR_SVG}</button>
-        <button class="btn-del" data-id="${s.id}" title="Delete (click twice)">${DEL_SVG}</button>
+        <button class="btn-pin${isPinned ? ' pinned' : ''}" data-id="${esc(key)}" title="Pin to top">${STAR_SVG}</button>
+        <button class="btn-del" data-id="${s.id}" data-key="${esc(key)}" data-provider="${esc(provider)}" title="Delete (click twice)">${DEL_SVG}</button>
       </div>
     </div>
     <div class="s-resume">
@@ -958,16 +999,25 @@ function renderCard(s) {
   </div>`;
 }
 
+function providerSessions() {
+  return allSessions.filter(s =>
+    (!providerFilter || (s.provider || 'claude') === providerFilter) &&
+    !s.isSubagent // Parsed for a future auxiliary/subagent browser, but intentionally hidden for now.
+  );
+}
+
 function renderProjectOptions() {
   const sel = document.getElementById('project');
   const prev = sel.value;
   const groups = {};
-  for (const s of allSessions) {
-    if (!groups[s.projectDir]) groups[s.projectDir] = { path: s.cwd || s.projectDir, count: 0 };
-    groups[s.projectDir].count++;
+  const base = providerSessions();
+  for (const s of base) {
+    const key = s.projectKey || s.projectDir;
+    if (!groups[key]) groups[key] = { path: s.cwd || s.projectDir, count: 0 };
+    groups[key].count++;
   }
   const entries = Object.entries(groups).sort((a, b) => a[1].path.localeCompare(b[1].path));
-  sel.innerHTML = `<option value="">All projects (${allSessions.length})</option>`
+  sel.innerHTML = `<option value="">All projects (${base.length})</option>`
     + entries.map(([dir, g]) => `<option value="${esc(dir)}">${esc(g.path)} (${g.count})</option>`).join('');
   sel.value = groups[prev] ? prev : '';
   if (sel.value !== prev) projectFilter = sel.value;
@@ -975,16 +1025,16 @@ function renderProjectOptions() {
 
 function getFiltered() {
   const q = (document.getElementById('search').value || '').toLowerCase().trim();
-  let result = allSessions;
-  if (projectFilter) result = result.filter(s => s.projectDir === projectFilter);
+  let result = providerSessions();
+  if (projectFilter) result = result.filter(s => (s.projectKey || s.projectDir) === projectFilter);
   if (q) result = result.filter(s =>
     (s.title||'').toLowerCase().includes(q) ||
     (s.cwd||'').toLowerCase().includes(q) ||
     s.id.startsWith(q) ||
-    (contentMatches && contentMatches[s.id] !== undefined)
+    (contentMatches && contentMatches[sessionKey(s)] !== undefined)
   );
   return [...result].sort((a,b) => {
-    const pa = pinned.has(a.id), pb = pinned.has(b.id);
+    const pa = pinned.has(sessionKey(a)), pb = pinned.has(sessionKey(b));
     if (pa !== pb) return pa ? -1 : 1;
     switch (sortKey) {
       case 'lastTs':    return (b.lastTs||b.firstTs||'').localeCompare(a.lastTs||a.firstTs||'');
@@ -1004,12 +1054,13 @@ function renderList() {
 
 function renderChatList() {
   ctxMax = allSessions.some(s => (s.ctxTokens || 0) > 200000) ? 1000000 : 200000;
+  const base = providerSessions();
   const sessions = getFiltered();
   const list  = document.getElementById('list');
   const count = document.getElementById('count');
-  count.textContent = allSessions.length === sessions.length
+  count.textContent = base.length === sessions.length
     ? ''
-    : `${sessions.length}/${allSessions.length}`;
+    : `${sessions.length}/${base.length}`;
 
   if (!sessions.length) {
     list.innerHTML = '<div class="state">No sessions found</div>';
@@ -1056,22 +1107,33 @@ function bindListHandlers() {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       const id = btn.dataset.id;
-      if (pendingDeletes[id]) {
-        clearTimeout(pendingDeletes[id]); delete pendingDeletes[id];
-        fetch(`/api/sessions/${id}`, { method: 'DELETE' }).then(r => r.json()).then(data => {
-          if (data.success) {
-            allSessions = allSessions.filter(s => s.id !== id);
-            if (pinned.delete(id)) savePins();
-            if (activeId === id) { activeId = null; showEmpty(); }
+      const key = btn.dataset.key || id;
+      const provider = btn.dataset.provider || 'claude';
+      if (pendingDeletes[key]) {
+        clearTimeout(pendingDeletes[key]); delete pendingDeletes[key];
+        fetch(`/api/sessions/${id}?provider=${encodeURIComponent(provider)}`, { method: 'DELETE' })
+          .then(async r => ({ ok: r.ok, data: await r.json() }))
+          .then(({ ok, data }) => {
+          if (ok && data.success) {
+            allSessions = allSessions.filter(s => sessionKey(s) !== key);
+            if (pinned.delete(key)) savePins();
+            if (activeId === key) { activeId = null; showEmpty(); }
             renderProjectOptions();
             renderList();
+          } else {
+            btn.textContent = 'Failed';
+            btn.title = data.error || 'Delete failed';
+            setTimeout(() => { btn.innerHTML = DEL_SVG; btn.classList.remove('confirming'); }, 2000);
           }
+        }).catch(() => {
+          btn.textContent = 'Failed';
+          setTimeout(() => { btn.innerHTML = DEL_SVG; btn.classList.remove('confirming'); }, 2000);
         });
       } else {
         btn.innerHTML = 'Delete?'; btn.classList.add('confirming');
-        pendingDeletes[id] = setTimeout(() => {
+        pendingDeletes[key] = setTimeout(() => {
           btn.innerHTML = DEL_SVG; btn.classList.remove('confirming');
-          delete pendingDeletes[id];
+          delete pendingDeletes[key];
         }, 2000);
       }
     });
@@ -1079,9 +1141,24 @@ function bindListHandlers() {
 }
 
 // ── Memory ───────────────────────────────────────────────────────────
-function memProjectPath(projectDir) {
-  const s = allSessions.find(x => x.projectDir === projectDir);
-  return (s && s.cwd) ? s.cwd : projectDir;
+function memoryKey(project) {
+  return project.key || `${project.provider || 'claude'}:${project.projectDir}`;
+}
+
+function activeMemoryMeta() {
+  return memProjects.find(project => memoryKey(project) === activeMemProject) || null;
+}
+
+function memProjectPath(project) {
+  if (project.path) return project.path;
+  const provider = project.provider || 'claude';
+  const s = allSessions.find(x => x.projectDir === project.projectDir && (x.provider || 'claude') === provider);
+  return (s && s.cwd) ? s.cwd : project.projectDir;
+}
+
+function providerBadge(provider) {
+  const name = provider || 'claude';
+  return `<span class="s-provider ${esc(name)}">${esc(name)}</span>`;
 }
 
 function parseFrontmatter(raw) {
@@ -1099,13 +1176,16 @@ function renderMemoryList() {
   const list = document.getElementById('list');
   const count = document.getElementById('count');
   const q = (document.getElementById('search').value || '').toLowerCase().trim();
-  let items = memProjects.map(p => ({ ...p, path: memProjectPath(p.projectDir) }));
-  if (q) items = items.filter(p => p.path.toLowerCase().includes(q) || p.projectDir.toLowerCase().includes(q));
+  let items = memProjects.map(p => ({ ...p, path: memProjectPath(p) }));
+  if (q) items = items.filter(p => (p.path + ' ' + p.projectDir + ' ' + (p.provider || 'claude')).toLowerCase().includes(q));
   count.textContent = items.length === memProjects.length ? '' : `${items.length}/${memProjects.length}`;
   if (!items.length) { list.innerHTML = '<div class="state">No memory found</div>'; return; }
   list.innerHTML = items.map(p => `
-    <div class="session${p.projectDir === activeMemProject ? ' active' : ''}" data-mem="${esc(p.projectDir)}">
-      <div class="s-path" title="${esc(p.path)}">${esc(p.path)}</div>
+    <div class="session${memoryKey(p) === activeMemProject ? ' active' : ''}" data-mem="${esc(memoryKey(p))}">
+      <div class="s-top">
+        <span class="s-path mem-project-path" title="${esc(p.path)}">${esc(p.path)}</span>
+        ${providerBadge(p.provider)}
+      </div>
       <div class="s-meta">
         <span>${p.fileCount} file${p.fileCount !== 1 ? 's' : ''}</span>
         <span class="dot">·</span>
@@ -1158,10 +1238,12 @@ async function saveMem(i) {
   status.className = 'mem-save-status';
   status.textContent = 'Saving…';
   try {
+    const memory = activeMemoryMeta();
+    if (!memory) throw new Error('Memory source not found');
     const r = await fetch('/api/memory/file', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project: activeMemProject, name: memFiles[i].name, content: newContent }),
+      body: JSON.stringify({ provider: memory.provider || 'claude', project: memory.projectDir, name: memFiles[i].name, content: newContent }),
     }).then(r => r.json());
     if (r.error) throw new Error(r.error);
     memFiles[i].content = newContent;
@@ -1179,10 +1261,12 @@ function deleteMem(i) {
   if (pendingMemDeletes[i]) {
     clearTimeout(pendingMemDeletes[i]); delete pendingMemDeletes[i];
     btn.textContent = 'Deleting…'; btn.classList.remove('confirming');
+    const memory = activeMemoryMeta();
+    if (!memory) { btn.textContent = 'Error'; return; }
     fetch('/api/memory/file', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project: activeMemProject, name: memFiles[i].name }),
+      body: JSON.stringify({ provider: memory.provider || 'claude', project: memory.projectDir, name: memFiles[i].name }),
     }).then(r => r.json()).then(data => {
       if (data.error) throw new Error(data.error);
       return refreshMemoryAfterDelete();
@@ -1198,7 +1282,7 @@ function deleteMem(i) {
 
 async function refreshMemoryAfterDelete() {
   try { memProjects = await fetch('/api/memory').then(r => r.json()); memProjectsLoaded = true; } catch {}
-  if (memProjects.some(p => p.projectDir === activeMemProject)) {
+  if (memProjects.some(p => memoryKey(p) === activeMemProject)) {
     await openMemoryProject(activeMemProject);   // re-fetch files, re-render panel + list
   } else {
     activeMemProject = null;                      // last file gone — project drops off the list
@@ -1207,18 +1291,20 @@ async function refreshMemoryAfterDelete() {
   }
 }
 
-async function openMemoryProject(projectDir) {
-  activeMemProject = projectDir;
+async function openMemoryProject(key) {
+  const memory = memProjects.find(project => memoryKey(project) === key);
+  if (!memory) return;
+  activeMemProject = key;
   renderMemoryList();
   document.getElementById('v-empty').style.display = 'none';
   document.getElementById('v-panel').style.display = 'flex';
   const vHead = document.getElementById('v-head');
   const vBody = document.getElementById('v-body');
-  vHead.innerHTML = `<div class="v-head-title">Memory</div><div class="v-head-meta">${esc(memProjectPath(projectDir))}</div>`;
+  vHead.innerHTML = `<div class="v-head-title">Memory ${providerBadge(memory.provider)}</div><div class="v-head-meta">${esc(memProjectPath(memory))}</div>`;
   vBody.innerHTML = '<div class="state"><div class="spinner"></div>Loading memory…</div>';
   vBody.scrollTop = 0;
   try {
-    const files = await fetch(`/api/memory/files?project=${encodeURIComponent(projectDir)}`).then(r => r.json());
+    const files = await fetch(`/api/memory/files?provider=${encodeURIComponent(memory.provider || 'claude')}&project=${encodeURIComponent(memory.projectDir)}`).then(r => r.json());
     if (files.error) throw new Error(files.error);
     memFiles = files;
     vBody.innerHTML = '<div class="fade-in">' + memFiles.map((f, i) => renderMemoryFile(f, i)).join('') + '</div>';
@@ -1264,9 +1350,9 @@ let activeSkill = null;    // skill index, 'readme', or null (= overview)
 const CARET_SVG = '<svg class="plg-caret" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>';
 
 function originBadge(o) {
-  return o === 'official'
-    ? '<span class="plg-badge official">Official</span>'
-    : '<span class="plg-badge third">3rd Party</span>';
+  if (o === 'official') return '<span class="plg-badge official">Official</span>';
+  if (o === 'local') return '<span class="plg-badge local">Local</span>';
+  return '<span class="plg-badge third">3rd Party</span>';
 }
 
 function activePluginMeta() {
@@ -1278,7 +1364,7 @@ function renderPluginList() {
   const count = document.getElementById('count');
   const q = (document.getElementById('search').value || '').toLowerCase().trim();
   let items = pluginItems;
-  if (q) items = items.filter(p => (p.name + ' ' + p.marketplace + ' ' + p.repo + ' ' + p.description).toLowerCase().includes(q));
+  if (q) items = items.filter(p => (p.name + ' ' + p.marketplace + ' ' + p.repo + ' ' + p.description + ' ' + (p.provider || 'claude')).toLowerCase().includes(q));
   count.textContent = items.length === pluginItems.length ? '' : `${items.length}/${pluginItems.length}`;
   if (!items.length) { list.innerHTML = '<div class="state">No plugins found</div>'; return; }
   list.innerHTML = items.map(p => {
@@ -1287,7 +1373,7 @@ function renderPluginList() {
       <div class="session plg ${p.scope}${open ? ' expanded' : ''}" data-plg="${esc(p.id)}">
         <div class="plg-top">
           <span class="plg-mkt">Marketplace: ${esc(p.marketplace)}</span>
-          ${originBadge(p.origin)}
+          <span class="plg-badges">${providerBadge(p.provider)}${originBadge(p.origin)}</span>
         </div>
         <div class="plg-name">${CARET_SVG}${esc(p.name)}</div>
         <div class="s-meta">
@@ -1352,7 +1438,7 @@ function renderPluginOverview() {
     ? `Project${p.projectPath ? ' — ' + esc(p.projectPath) : ''}`
     : 'User — available in all projects';
   document.getElementById('v-head').innerHTML = `
-    <div class="v-head-title">${esc(p.name || '')} ${originBadge(p.origin)}</div>
+    <div class="v-head-title">${esc(p.name || '')} ${providerBadge(p.provider)} ${originBadge(p.origin)}</div>
     <div class="v-head-meta">Plugin overview</div>`;
   document.getElementById('v-body').scrollTop = 0;
   document.getElementById('v-body').innerHTML = `
@@ -1360,6 +1446,7 @@ function renderPluginOverview() {
       <div class="plg-ov-row"><span class="plg-ov-label">Marketplace</span>
         <span class="plg-ov-val">${esc(p.marketplace)}<span class="plg-ov-repo">${esc(p.repo || '')}</span></span></div>
       <div class="plg-ov-row"><span class="plg-ov-label">Plugin</span><span class="plg-ov-val">${esc(p.name || '')}</span></div>
+      <div class="plg-ov-row"><span class="plg-ov-label">Provider</span><span class="plg-ov-val">${providerBadge(p.provider)}</span></div>
       <div class="plg-ov-row"><span class="plg-ov-label">Source</span><span class="plg-ov-val">${originBadge(p.origin)}</span></div>
       <div class="plg-ov-row"><span class="plg-ov-label">Scope</span><span class="plg-ov-val ${esc(p.scope)}">${scopeVal}</span></div>
       <div class="plg-ov-row"><span class="plg-ov-label">Skills</span><span class="plg-ov-val">${p.skills} skill${p.skills !== 1 ? 's' : ''}</span></div>
@@ -1421,11 +1508,11 @@ function showEmpty() {
   document.getElementById('v-panel').style.display = 'none';
 }
 
-async function openSession(id) {
-  activeId = id;
+async function openSession(key) {
+  activeId = key;
   renderList();
 
-  const session = allSessions.find(s => s.id === id);
+  const session = allSessions.find(s => sessionKey(s) === key);
 
   document.getElementById('v-empty').style.display = 'none';
   const panel = document.getElementById('v-panel');
@@ -1443,13 +1530,15 @@ async function openSession(id) {
 
   vHead.innerHTML = `
     <div class="v-head-title">${esc(session?.title || 'Untitled session')}</div>
-    <div class="v-head-meta">${esc(session?.cwd || '')}${dateMeta ? ' &nbsp;·&nbsp; ' + dateMeta : ''}</div>`;
+    <div class="v-head-meta">${esc(session?.provider || 'claude')}${session?.cwd ? ' &nbsp;·&nbsp; ' + esc(session.cwd) : ''}${dateMeta ? ' &nbsp;·&nbsp; ' + dateMeta : ''}</div>`;
 
   vBody.innerHTML = '<div class="state"><div class="spinner"></div>Loading conversation…</div>';
   vBody.scrollTop = 0;
 
   try {
-    const resp = await fetch(`/api/sessions/${id}/messages`);
+    if (!session) throw new Error('Session not found');
+    const provider = session.provider || 'claude';
+    const resp = await fetch(`/api/sessions/${session.id}/messages?provider=${encodeURIComponent(provider)}`);
     const messages = await resp.json();
     if (messages.error) throw new Error(messages.error);
     vBody.innerHTML = renderConversation(messages);
@@ -1513,7 +1602,7 @@ function groupToolResults(messages) {
 function renderTurn(msg) {
   if (msg.type === 'summary') {
     return `<div class="summary-sep">Context summarized</div>
-            <p class="summary-text">${esc(msg.text)}</p>`;
+            ${msg.text ? `<p class="summary-text">${esc(msg.text)}</p>` : ''}`;
   }
   if (msg.type !== 'turn') return '';
 
@@ -1531,8 +1620,9 @@ function renderTurn(msg) {
   if (msg.role === 'assistant') {
     const textParts = msg.parts.filter(p => p.kind === 'text');
     const toolParts = msg.parts.filter(p => p.kind === 'tool_use');
+    const assistantName = msg.provider === 'codex' ? 'Codex' : 'Claude';
     return `<div class="turn assistant">
-      <div class="turn-label">Claude ${ts}</div>
+      <div class="turn-label">${assistantName} ${ts}</div>
       <div class="md-body">${textParts.map(p => renderMd(p.text)).join('')}</div>
       ${toolParts.map((p, i) => renderToolUse(p, i)).join('')}
     </div>`;
@@ -1663,6 +1753,12 @@ document.getElementById('search').addEventListener('input', () => {
 });
 document.getElementById('sort').addEventListener('change', e => { sortKey = e.target.value; renderList(); });
 document.getElementById('project').addEventListener('change', e => { projectFilter = e.target.value; renderList(); });
+document.getElementById('provider').addEventListener('change', e => {
+  providerFilter = e.target.value;
+  renderProjectOptions();
+  if (activeId && !getFiltered().some(s => sessionKey(s) === activeId)) { activeId = null; showEmpty(); }
+  renderList();
+});
 document.getElementById('btn-theme').addEventListener('click', toggleTheme);
 document.getElementById('vt-chats').addEventListener('click', () => switchView('chats'));
 document.getElementById('vt-memory').addEventListener('click', () => switchView('memory'));

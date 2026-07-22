@@ -7,6 +7,15 @@ const os = require('os');
 const path = require('path');
 const readline = require('readline');
 const { exec, execFile } = require('child_process');
+const { deleteCodexSessionFile, loadCodexSessions, parseCodexMessages } = require('./codex-sessions');
+const {
+  deleteCodexMemoryFile,
+  listCodexMemoryProject,
+  loadCodexPlugins,
+  readCodexMemoryFiles,
+  writeCodexMemoryFile,
+} = require('./codex-data');
+const { normalizeDisplayPath, resolveClaudeProjectDir } = require('./session-paths');
 
 // Default port differs per environment so a Windows instance and a WSL instance
 // can both run at once. WSL2 forwards localhost to Windows, so sharing a default
@@ -15,6 +24,7 @@ const DEFAULT_PORT = process.platform === 'win32' ? 3132 : 3131;
 const PORT = Number.isInteger(parseInt(process.argv[2])) ? parseInt(process.argv[2]) : DEFAULT_PORT;
 const HOME = os.homedir();
 const CLAUDE_PROJECTS = path.join(HOME, '.claude', 'projects');
+const CODEX_HOME = process.env.CODEX_HOME || path.join(HOME, '.codex');
 const SETTINGS_PATH = path.join(HOME, '.claude', 'settings.json');
 const PLUGINS_DIR = path.join(HOME, '.claude', 'plugins');
 const INSTALLED_PLUGINS = path.join(PLUGINS_DIR, 'installed_plugins.json');
@@ -62,19 +72,21 @@ function collectSpokenText(content, out) {
   for (const p of content) if (p && p.type === 'text' && p.text) out.push(p.text);
 }
 
-async function parseSession(filePath, projectDir) {
+async function parseSession(filePath, projectDir, fallbackCwd = '') {
   const { size } = fs.statSync(filePath);
-  const s = { id: path.basename(filePath, '.jsonl'), projectDir, title: '', cwd: '', firstTs: '', lastTs: '', msgCount: 0, summary: '', sizeBytes: size, ctxTokens: 0 };
+  const id = path.basename(filePath, '.jsonl');
+  const s = { provider: 'claude', key: id, id, projectDir, projectKey: '', title: '', cwd: '', firstTs: '', lastTs: '', msgCount: 0, summary: '', sizeBytes: size, ctxTokens: 0, contextWindow: 0, source: 'claude', isSubagent: false, archived: false };
   const spoken = [];
   await new Promise((resolve) => {
     const rl = readline.createInterface({ input: fs.createReadStream(filePath), crlfDelay: Infinity });
     rl.on('line', (line) => {
       if (!line.trim()) return;
       let d; try { d = JSON.parse(line); } catch { return; }
+      if (!s.cwd && d.cwd) s.cwd = normalizeDisplayPath(d.cwd);
       switch (d.type) {
         case 'ai-title':   if (d.aiTitle) s.title = d.aiTitle; break;
         case 'user':
-          s.msgCount++; if (!s.cwd && d.cwd) s.cwd = d.cwd; if (!s.firstTs && d.timestamp) s.firstTs = d.timestamp; if (d.timestamp) s.lastTs = d.timestamp;
+          s.msgCount++; if (!s.firstTs && d.timestamp) s.firstTs = d.timestamp; if (d.timestamp) s.lastTs = d.timestamp;
           if (!d.isMeta && d.message) collectSpokenText(d.message.content, spoken);  // isMeta = harness-injected, not the user
           break;
         case 'assistant':
@@ -92,14 +104,16 @@ async function parseSession(filePath, projectDir) {
     rl.on('close', resolve); rl.on('error', resolve);
   });
   // Held server-side for /api/search; stripped from /api/sessions responses.
+  s.cwd = normalizeDisplayPath(s.cwd || fallbackCwd);
   s.searchText = spoken.join('\n');
   s.searchLower = s.searchText.toLowerCase();
+  s.projectKey = s.cwd || s.projectDir;
   return s;
 }
 
 // Sessions as sent to the client — without the in-memory search text.
 function publicSessions(list) {
-  return list.map(({ searchText, searchLower, ...rest }) => rest);
+  return list.map(({ searchText, searchLower, filePath, ...rest }) => rest);
 }
 
 // Strip decoration that renders as an unbreakable line when whitespace is
@@ -122,18 +136,36 @@ function makeSnippet(text, idx, qLen) {
   return (start > 0 ? '…' : '') + snip + (end < text.length ? '…' : '');
 }
 
-async function loadSessions() {
+async function loadClaudeSessions() {
   const sessions = [];
   if (!fs.existsSync(CLAUDE_PROJECTS)) return sessions;
   for (const dir of fs.readdirSync(CLAUDE_PROJECTS)) {
     const dirPath = path.join(CLAUDE_PROJECTS, dir);
     try { if (!fs.statSync(dirPath).isDirectory()) continue; } catch { continue; }
+    const fallbackCwd = resolveClaudeProjectDir(dir);
+    const projectSessions = [];
     for (const file of fs.readdirSync(dirPath).filter(f => f.endsWith('.jsonl'))) {
-      try { sessions.push(await parseSession(path.join(dirPath, file), dir)); } catch {}
+      try { projectSessions.push(await parseSession(path.join(dirPath, file), dir, fallbackCwd)); } catch {}
+    }
+    // Claude groups sessions by working directory. If one transcript records
+    // cwd, use it for older/sparse transcripts in the same project folder.
+    const projectCwd = projectSessions.find(session => session.cwd)?.cwd || fallbackCwd;
+    for (const session of projectSessions) {
+      session.cwd = normalizeDisplayPath(session.cwd || projectCwd);
+      session.projectKey = session.cwd || session.projectDir;
+      sessions.push(session);
     }
   }
-  sessions.sort((a, b) => (b.lastTs || b.firstTs || '').localeCompare(a.lastTs || a.firstTs || ''));
   return sessions;
+}
+
+async function loadSessions() {
+  const [claudeSessions, codexSessions] = await Promise.all([
+    loadClaudeSessions(),
+    loadCodexSessions(CODEX_HOME),
+  ]);
+  return [...claudeSessions, ...codexSessions]
+    .sort((a, b) => (b.lastTs || b.firstTs || '').localeCompare(a.lastTs || a.firstTs || ''));
 }
 
 // ── Memory files (~/.claude/projects/<project>/memory/*.md) ───────────
@@ -141,23 +173,32 @@ const MEMORY_DIRNAME = 'memory';
 
 function listMemoryProjects() {
   const out = [];
-  if (!fs.existsSync(CLAUDE_PROJECTS)) return out;
-  for (const dir of fs.readdirSync(CLAUDE_PROJECTS)) {
-    const memDir = path.join(CLAUDE_PROJECTS, dir, MEMORY_DIRNAME);
-    let files;
-    try { files = fs.readdirSync(memDir).filter(f => f.endsWith('.md')); } catch { continue; }
-    if (!files.length) continue;
-    let mtime = 0, bytes = 0;
-    for (const f of files) {
-      try { const st = fs.statSync(path.join(memDir, f)); mtime = Math.max(mtime, st.mtimeMs); bytes += st.size; } catch {}
+  if (fs.existsSync(CLAUDE_PROJECTS)) {
+    for (const dir of fs.readdirSync(CLAUDE_PROJECTS)) {
+      const memDir = path.join(CLAUDE_PROJECTS, dir, MEMORY_DIRNAME);
+      let files;
+      try { files = fs.readdirSync(memDir).filter(f => f.endsWith('.md')); } catch { continue; }
+      if (!files.length) continue;
+      let mtime = 0, bytes = 0;
+      for (const f of files) {
+        try { const st = fs.statSync(path.join(memDir, f)); mtime = Math.max(mtime, st.mtimeMs); bytes += st.size; } catch {}
+      }
+      out.push({
+        provider: 'claude', key: `claude:${dir}`, projectDir: dir,
+        path: resolveClaudeProjectDir(dir) || dir,
+        fileCount: files.length, sizeBytes: bytes, mtime,
+      });
     }
-    out.push({ projectDir: dir, fileCount: files.length, sizeBytes: bytes, mtime });
   }
+  const codex = listCodexMemoryProject(CODEX_HOME);
+  if (codex) out.push(codex);
   out.sort((a, b) => b.mtime - a.mtime);
   return out;
 }
 
-function readMemoryFiles(projectDir) {
+function readMemoryFiles(provider, projectDir) {
+  if (provider === 'codex') return readCodexMemoryFiles(CODEX_HOME);
+  if (provider !== 'claude') throw new Error('invalid provider');
   // single path segment only — blocks traversal (no slashes/backslashes)
   if (typeof projectDir !== 'string' || !/^[^/\\]+$/.test(projectDir)) throw new Error('invalid project');
   const memDir = path.join(CLAUDE_PROJECTS, projectDir, MEMORY_DIRNAME);
@@ -171,7 +212,9 @@ function readMemoryFiles(projectDir) {
   });
 }
 
-function writeMemoryFile(projectDir, name, content) {
+function writeMemoryFile(provider, projectDir, name, content) {
+  if (provider === 'codex') return writeCodexMemoryFile(CODEX_HOME, name, content);
+  if (provider !== 'claude') throw new Error('invalid provider');
   if (typeof projectDir !== 'string' || !/^[^/\\]+$/.test(projectDir)) throw new Error('invalid project');
   if (typeof name !== 'string' || name.includes('..') || !/^[A-Za-z0-9._-]+\.md$/.test(name)) throw new Error('invalid file name');
   if (typeof content !== 'string') throw new Error('invalid content');
@@ -181,7 +224,9 @@ function writeMemoryFile(projectDir, name, content) {
   return { ok: true };
 }
 
-function deleteMemoryFile(projectDir, name) {
+function deleteMemoryFile(provider, projectDir, name) {
+  if (provider === 'codex') return deleteCodexMemoryFile(CODEX_HOME, name);
+  if (provider !== 'claude') throw new Error('invalid provider');
   if (typeof projectDir !== 'string' || !/^[^/\\]+$/.test(projectDir)) throw new Error('invalid project');
   if (typeof name !== 'string' || name.includes('..') || !/^[A-Za-z0-9._-]+\.md$/.test(name)) throw new Error('invalid file name');
   const fp = path.join(CLAUDE_PROJECTS, projectDir, MEMORY_DIRNAME, name);
@@ -221,7 +266,7 @@ function componentCounts(installPath) {
   return c;
 }
 
-function loadPlugins() {
+function loadClaudePlugins() {
   const installed = readJson(INSTALLED_PLUGINS);
   const markets = readJson(KNOWN_MARKETPLACES);
   const settings = readJson(SETTINGS_PATH);
@@ -239,6 +284,7 @@ function loadPlugins() {
       const counts = componentCounts(entry.installPath);
       out.push({
         id: `${key}::${idx}`,
+        provider: 'claude',
         key, name: meta.name || pname, marketplace, repo,
         description: meta.description || '',
         scope: entry.scope || 'user',
@@ -255,8 +301,23 @@ function loadPlugins() {
   return out;
 }
 
+let codexPluginEntries = new Map();
+
+function loadPlugins(sessions = []) {
+  const codex = loadCodexPlugins(CODEX_HOME, HOME, sessions);
+  codexPluginEntries = new Map(codex.map(entry => [entry.id, entry]));
+  const publicCodex = codex.map(({ installPath, skillRoot, skillNames, ...entry }) => entry);
+  return [...loadClaudePlugins(), ...publicCodex]
+    .sort((a, b) => a.name.localeCompare(b.name) || a.scope.localeCompare(b.scope));
+}
+
 function findPluginEntry(id) {
   if (typeof id !== 'string') throw new Error('invalid id');
+  if (id.startsWith('codex::')) {
+    const entry = codexPluginEntries.get(id);
+    if (!entry) throw new Error('plugin not found');
+    return entry;
+  }
   const sep = id.lastIndexOf('::');
   if (sep < 0) throw new Error('invalid id');
   const key = id.slice(0, sep);
@@ -286,16 +347,20 @@ function listFilesRel(dir, root) {
 }
 
 function readPluginSkills(id) {
-  const root = findPluginEntry(id).installPath;
+  const entry = findPluginEntry(id);
+  const root = entry.installPath;
+  const skillsRoot = entry.skillRoot || path.join(root, 'skills');
   const result = { readme: '', skills: [], commands: [], agents: [] };
   for (const r of ['README.md', 'readme.md']) {
     const p = path.join(root, r);
     try { if (fs.statSync(p).size < 200000) { result.readme = fs.readFileSync(p, 'utf8'); break; } } catch {}
   }
-  let dirs = [];
-  try { dirs = fs.readdirSync(path.join(root, 'skills'), { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort(); } catch {}
+  let dirs = Array.isArray(entry.skillNames) ? entry.skillNames : [];
+  if (!Array.isArray(entry.skillNames)) {
+    try { dirs = fs.readdirSync(skillsRoot, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort(); } catch {}
+  }
   for (const name of dirs) {
-    const sdir = path.join(root, 'skills', name);
+    const sdir = path.join(skillsRoot, name);
     let skillMd = ''; try { skillMd = fs.readFileSync(path.join(sdir, 'SKILL.md'), 'utf8'); } catch {}
     const extraFiles = listFilesRel(sdir, root).filter(f => path.basename(f.rel) !== 'SKILL.md');
     result.skills.push({ name, skillMd, extraFiles });
@@ -438,7 +503,7 @@ function extractResultText(content) {
   return { text: truncated ? text.slice(0, 5000) : text, truncated };
 }
 
-async function parseMessages(sessionId) {
+async function parseClaudeMessages(sessionId) {
   let filePath = null;
   for (const dir of fs.readdirSync(CLAUDE_PROJECTS)) {
     const candidate = path.join(CLAUDE_PROJECTS, dir, `${sessionId}.jsonl`);
@@ -481,10 +546,10 @@ async function parseMessages(sessionId) {
             });
           }
         }
-        if (parts.length) messages.push({ type: 'turn', role: d.type, timestamp: d.timestamp || '', parts });
+        if (parts.length) messages.push({ type: 'turn', role: d.type, provider: 'claude', timestamp: d.timestamp || '', parts });
 
       } else if (d.type === 'system' && d.subtype === 'away_summary' && d.content) {
-        messages.push({ type: 'summary', text: d.content, timestamp: d.timestamp || '' });
+        messages.push({ type: 'summary', provider: 'claude', text: d.content, timestamp: d.timestamp || '' });
       }
     });
     rl.on('close', resolve); rl.on('error', resolve);
@@ -497,7 +562,8 @@ async function parseMessages(sessionId) {
 let cache = null;
 
 const server = http.createServer(async (req, res) => {
-  const { pathname } = new URL(req.url, `http://localhost:${PORT}`);
+  const requestUrl = new URL(req.url, `http://localhost:${PORT}`);
+  const { pathname } = requestUrl;
   const { method } = req;
 
   // Serve the SPA
@@ -520,13 +586,13 @@ const server = http.createServer(async (req, res) => {
   // Returns { <sessionId>: <snippet> } for every session containing the query.
   if (method === 'GET' && pathname === '/api/search') {
     try {
-      const q = (new URL(req.url, `http://localhost:${PORT}`).searchParams.get('q') || '').trim().toLowerCase();
+      const q = (requestUrl.searchParams.get('q') || '').trim().toLowerCase();
       if (!q) return jsonResponse(res, {});
       if (!cache) cache = await loadSessions();
       const out = {};
       for (const s of cache) {
         const i = s.searchLower.indexOf(q);
-        if (i >= 0) out[s.id] = makeSnippet(s.searchText, i, q.length);
+        if (i >= 0) out[s.key || s.id] = makeSnippet(s.searchText, i, q.length);
       }
       return jsonResponse(res, out);
     } catch (e) { return jsonResponse(res, { error: e.message }, 500); }
@@ -535,7 +601,17 @@ const server = http.createServer(async (req, res) => {
   // Session conversation messages
   if (method === 'GET' && /^\/api\/sessions\/[0-9a-f-]{36}\/messages$/.test(pathname)) {
     const id = pathname.split('/')[3];
-    try { return jsonResponse(res, await parseMessages(id)); }
+    const provider = requestUrl.searchParams.get('provider') || 'claude';
+    try {
+      if (provider === 'codex') {
+        if (!cache) cache = await loadSessions();
+        const session = cache.find(s => s.provider === 'codex' && s.id === id);
+        if (!session || !session.filePath) return jsonResponse(res, { error: 'Session not found' }, 404);
+        return jsonResponse(res, await parseCodexMessages(session.filePath));
+      }
+      if (provider !== 'claude') return jsonResponse(res, { error: 'Unknown session provider' }, 400);
+      return jsonResponse(res, await parseClaudeMessages(id));
+    }
     catch (e) { return jsonResponse(res, { error: e.message }, 500); }
   }
 
@@ -547,9 +623,26 @@ const server = http.createServer(async (req, res) => {
 
   // Delete a session
   if (method === 'DELETE' && pathname.startsWith('/api/sessions/')) {
+    const provider = requestUrl.searchParams.get('provider') || 'claude';
     const id = pathname.split('/').pop();
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id))
       return jsonResponse(res, { error: 'invalid session id' }, 400);
+
+    if (provider === 'codex') {
+      try {
+        if (!cache) cache = await loadSessions();
+        const session = cache.find(s => s.provider === 'codex' && s.id === id);
+        if (!session || !session.filePath) return jsonResponse(res, { error: 'session not found' }, 404);
+        if (!deleteCodexSessionFile(CODEX_HOME, session))
+          return jsonResponse(res, { error: 'session not found' }, 404);
+        cache = null;
+        return jsonResponse(res, { success: true });
+      } catch (e) {
+        return jsonResponse(res, { error: e.message }, 500);
+      }
+    }
+    if (provider !== 'claude') return jsonResponse(res, { error: 'Unknown session provider' }, 400);
+
     cache = null;
     let found = false;
     for (const dir of fs.readdirSync(CLAUDE_PROJECTS)) {
@@ -609,40 +702,54 @@ const server = http.createServer(async (req, res) => {
   }
   // Memory: read all memory files for one project
   if (method === 'GET' && pathname === '/api/memory/files') {
-    const project = new URL(req.url, `http://localhost:${PORT}`).searchParams.get('project') || '';
-    try { return jsonResponse(res, readMemoryFiles(project)); }
+    const project = requestUrl.searchParams.get('project') || '';
+    const provider = requestUrl.searchParams.get('provider') || 'claude';
+    try { return jsonResponse(res, readMemoryFiles(provider, project)); }
     catch (e) { return jsonResponse(res, { error: e.message }, 500); }
   }
   // Memory: write one memory file
   if (method === 'PUT' && pathname === '/api/memory/file') {
     try {
       const body = await readBody(req);
-      return jsonResponse(res, writeMemoryFile(body.project, body.name, body.content));
+      return jsonResponse(res, writeMemoryFile(body.provider || 'claude', body.project, body.name, body.content));
     } catch (e) { return jsonResponse(res, { error: e.message }, 400); }
   }
   // Memory: delete one memory file
   if (method === 'DELETE' && pathname === '/api/memory/file') {
     try {
       const body = await readBody(req);
-      return jsonResponse(res, deleteMemoryFile(body.project, body.name));
+      return jsonResponse(res, deleteMemoryFile(body.provider || 'claude', body.project, body.name));
     } catch (e) { return jsonResponse(res, { error: e.message }, 400); }
   }
 
   // Plugins: list installed plugins
   if (method === 'GET' && pathname === '/api/plugins') {
-    try { return jsonResponse(res, loadPlugins()); }
+    try {
+      if (!cache) cache = await loadSessions();
+      return jsonResponse(res, loadPlugins(cache));
+    }
     catch (e) { return jsonResponse(res, { error: e.message }, 500); }
   }
   // Plugins: skills + bundled-file manifest for one install
   if (method === 'GET' && pathname === '/api/plugins/skills') {
-    const id = new URL(req.url, `http://localhost:${PORT}`).searchParams.get('id') || '';
-    try { return jsonResponse(res, readPluginSkills(id)); }
+    const id = requestUrl.searchParams.get('id') || '';
+    try {
+      if (id.startsWith('codex::') && !codexPluginEntries.has(id)) {
+        if (!cache) cache = await loadSessions();
+        loadPlugins(cache);
+      }
+      return jsonResponse(res, readPluginSkills(id));
+    }
     catch (e) { return jsonResponse(res, { error: e.message }, 400); }
   }
   // Plugins: open a bundled file in the user's editor (OS "Open with")
   if (method === 'POST' && pathname === '/api/plugins/open') {
     try {
       const body = await readBody(req);
+      if (String(body.id || '').startsWith('codex::') && !codexPluginEntries.has(body.id)) {
+        if (!cache) cache = await loadSessions();
+        loadPlugins(cache);
+      }
       const fp = pluginFileAbsPath(body.id || '', body.rel || '');
       await new Promise((resolve, reject) => openExternal(fp, (err) => err ? reject(err) : resolve()));
       return jsonResponse(res, { ok: true });
@@ -670,11 +777,12 @@ function openBrowser(url) {
 function banner(port) {
   const siteUrl = `http://localhost:${port}`;
   process.stdout.write('\x1b[2J\x1b[H');
-  console.log('\n  \x1b[32m◆ Claude Sessions\x1b[0m\n');
+  console.log('\n  \x1b[32m◆ Agent Sessions\x1b[0m\n');
   console.log(`  ${siteUrl}`);
-  console.log(`  Sessions: ${CLAUDE_PROJECTS}`);
+  console.log(`  Claude: ${CLAUDE_PROJECTS}`);
+  console.log(`  Codex:  ${path.join(CODEX_HOME, 'sessions')}`);
   console.log('  Ctrl+C to stop\n');
-  openBrowser(siteUrl);
+  if (process.env.CLAUDE_GUI_NO_BROWSER !== '1') openBrowser(siteUrl);
 }
 
 // Is claude-gui already serving on this port? (used to handle a busy port nicely)
@@ -697,7 +805,7 @@ function start(port) {
       process.exit(1);
     }
     if (await claudeGuiAlreadyOn(port)) {
-      console.log(`\n  \x1b[32m◆ Claude Sessions\x1b[0m is already running at http://localhost:${port}\n  Opening it in your browser...\n`);
+      console.log(`\n  \x1b[32m◆ Agent Sessions\x1b[0m is already running at http://localhost:${port}\n  Opening it in your browser...\n`);
       openBrowser(`http://localhost:${port}`);
       process.exit(0);
     }
