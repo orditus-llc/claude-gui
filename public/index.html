@@ -247,6 +247,7 @@
     }
     .s-provider.claude { color: #d97757; border-color: #d97757; background: rgba(217, 119, 87, 0.12); }
     .s-provider.codex { color: #3b82f6; border-color: #3b82f6; background: rgba(59, 130, 246, 0.12); }
+    .s-provider.antigravity { color: #a855f7; border-color: #a855f7; background: rgba(168, 85, 247, 0.12); }
     .s-provider.chatgpt { color: #10a37f; border-color: #10a37f; background: rgba(16, 163, 127, 0.12); }
     .s-provider.claude-export { color: #d97757; border-color: #d97757; background: rgba(217, 119, 87, 0.12); }
 
@@ -718,6 +719,7 @@
           <option value="">All</option>
           <option value="claude">Claude Code</option>
           <option value="codex">Codex</option>
+          <option value="antigravity">Antigravity</option>
           <option value="chatgpt">ChatGPT</option>
           <option value="claude-export">Claude</option>
         </select>
@@ -819,6 +821,7 @@ function sessionProviderName(s) {
   return provider === 'chatgpt' ? 'ChatGPT'
     : provider === 'claude-export' ? 'Claude'
     : provider === 'claude' ? 'Claude Code'
+    : provider === 'antigravity' ? 'Antigravity'
     : provider;
 }
 function sessionProviderLabel(s) {
@@ -1013,6 +1016,7 @@ function renderCard(s) {
   const key = sessionKey(s);
   const copyValue = isExport ? s.url : provider === 'codex'
     ? `codex resume ${s.id}`
+    : provider === 'antigravity' ? `agy --conversation ${s.id}`
     : s.cwd ? `cd "${s.cwd}" && claude --resume ${s.id}` : `claude --resume ${s.id}`;
   const displayValue = isExport ? s.url : s.id;
   const isActive = key === activeId;
@@ -1061,6 +1065,9 @@ function renderProjectOptions() {
   const groups = {};
   const base = providerSessions();
   for (const s of base) {
+    // A local session without workspace metadata still belongs in “All projects,”
+    // but must not manufacture a fake project option from its provider label.
+    if (s.provider === 'antigravity' && !s.cwd) continue;
     const key = s.projectKey || s.projectDir;
     if (!groups[key]) groups[key] = { path: s.cwd || s.projectDir, count: 0 };
     groups[key].count++;
@@ -1679,6 +1686,7 @@ function renderTurn(msg) {
     const textParts = msg.parts.filter(p => p.kind === 'text');
     const toolParts = msg.parts.filter(p => p.kind === 'tool_use');
     const assistantName = msg.provider === 'codex' ? 'Codex'
+      : msg.provider === 'antigravity' ? 'Antigravity'
       : msg.provider === 'chatgpt' ? 'ChatGPT'
       : msg.provider === 'claude-export' ? 'Claude'
       : 'Claude Code';

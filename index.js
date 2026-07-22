@@ -8,6 +8,7 @@ const path = require('path');
 const readline = require('readline');
 const { exec, execFile } = require('child_process');
 const { deleteCodexSessionFile, loadCodexSessions, parseCodexMessages } = require('./codex-sessions');
+const { deleteAntigravitySession, loadAntigravitySessions, parseAntigravityMessages } = require('./antigravity-sessions');
 const { loadChatGptSessions, parseChatGptMessages, validateChatGptExportPath } = require('./chatgpt-sessions');
 const { loadClaudeExportSessions, parseClaudeExportMessages, validateClaudeExportPath } = require('./claude-export-sessions');
 const {
@@ -27,6 +28,7 @@ const PORT = Number.isInteger(parseInt(process.argv[2])) ? parseInt(process.argv
 const HOME = os.homedir();
 const CLAUDE_PROJECTS = path.join(HOME, '.claude', 'projects');
 const CODEX_HOME = process.env.CODEX_HOME || path.join(HOME, '.codex');
+const ANTIGRAVITY_HOME = process.env.ANTIGRAVITY_HOME || path.join(HOME, '.gemini', 'antigravity-cli');
 const SETTINGS_PATH = path.join(HOME, '.claude', 'settings.json');
 const PLUGINS_DIR = path.join(HOME, '.claude', 'plugins');
 const INSTALLED_PLUGINS = path.join(PLUGINS_DIR, 'installed_plugins.json');
@@ -162,14 +164,15 @@ async function loadClaudeSessions() {
 }
 
 async function loadSessions() {
-  const [claudeSessions, codexSessions] = await Promise.all([
+  const [claudeSessions, codexSessions, antigravitySessions] = await Promise.all([
     loadClaudeSessions(),
     loadCodexSessions(CODEX_HOME),
+    loadAntigravitySessions(ANTIGRAVITY_HOME),
   ]);
   const data = loadData();
   const chatGptSessions = loadChatGptSessions(String(data.chatgptExportPath || '').trim());
   const claudeExportSessions = loadClaudeExportSessions(String(data.claudeExportPath || '').trim());
-  return [...claudeSessions, ...codexSessions, ...chatGptSessions, ...claudeExportSessions]
+  return [...claudeSessions, ...codexSessions, ...antigravitySessions, ...chatGptSessions, ...claudeExportSessions]
     .sort((a, b) => (b.lastTs || b.firstTs || '').localeCompare(a.lastTs || a.firstTs || ''));
 }
 
@@ -614,6 +617,12 @@ const server = http.createServer(async (req, res) => {
         if (!session || !session.filePath) return jsonResponse(res, { error: 'Session not found' }, 404);
         return jsonResponse(res, await parseCodexMessages(session.filePath));
       }
+      if (provider === 'antigravity') {
+        if (!cache) cache = await loadSessions();
+        const session = cache.find(s => s.provider === 'antigravity' && s.id === id);
+        if (!session || !session.filePath) return jsonResponse(res, { error: 'Session not found' }, 404);
+        return jsonResponse(res, await parseAntigravityMessages(session.filePath));
+      }
       if (provider === 'chatgpt') {
         if (!cache) cache = await loadSessions();
         const session = cache.find(s => s.provider === 'chatgpt' && s.id === id);
@@ -657,6 +666,17 @@ const server = http.createServer(async (req, res) => {
       } catch (e) {
         return jsonResponse(res, { error: e.message }, 500);
       }
+    }
+    if (provider === 'antigravity') {
+      try {
+        if (!cache) cache = await loadSessions();
+        const session = cache.find(s => s.provider === 'antigravity' && s.id === id);
+        if (!session) return jsonResponse(res, { error: 'session not found' }, 404);
+        if (!await deleteAntigravitySession(ANTIGRAVITY_HOME, session))
+          return jsonResponse(res, { error: 'session not found' }, 404);
+        cache = null;
+        return jsonResponse(res, { success: true });
+      } catch (e) { return jsonResponse(res, { error: e.message }, 500); }
     }
     if (provider !== 'claude') return jsonResponse(res, { error: 'Unknown session provider' }, 400);
 
@@ -817,6 +837,7 @@ function banner(port) {
   console.log(`  ${siteUrl}`);
   console.log(`  Claude: ${CLAUDE_PROJECTS}`);
   console.log(`  Codex:  ${path.join(CODEX_HOME, 'sessions')}`);
+  console.log(`  AGY:    ${path.join(ANTIGRAVITY_HOME, 'conversations')}`);
   console.log('  Ctrl+C to stop\n');
   if (process.env.CLAUDE_GUI_NO_BROWSER !== '1') openBrowser(siteUrl);
 }
