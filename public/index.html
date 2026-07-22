@@ -243,9 +243,12 @@
       flex-shrink: 0; border: 1px solid var(--border); border-radius: 999px;
       color: var(--text3); font-size: 9px; font-weight: 600; line-height: 15px;
       padding: 0 6px; text-transform: uppercase; letter-spacing: 0.35px;
+      max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .s-provider.claude { color: #d97757; border-color: #d97757; background: rgba(217, 119, 87, 0.12); }
     .s-provider.codex { color: #3b82f6; border-color: #3b82f6; background: rgba(59, 130, 246, 0.12); }
+    .s-provider.chatgpt { color: #10a37f; border-color: #10a37f; background: rgba(16, 163, 127, 0.12); }
+    .s-provider.claude-export { color: #d97757; border-color: #d97757; background: rgba(217, 119, 87, 0.12); }
 
     .s-actions { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
     .s-actions-meta { margin-left: auto; display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
@@ -570,7 +573,7 @@
     }
     .modal {
       background: var(--surface); border: 1px solid var(--border2);
-      border-radius: 10px; width: 340px;
+      border-radius: 10px; width: 440px; max-width: calc(100vw - 32px);
       box-shadow: 0 20px 60px rgba(0,0,0,0.5);
     }
     .modal-head {
@@ -605,6 +608,12 @@
     }
     .setting-num:focus { border-color: var(--accent); }
     .setting-num:disabled { opacity: 0.4; cursor: not-allowed; }
+    .setting-input {
+      width: 100%; height: 32px; box-sizing: border-box; background: var(--surface2);
+      border: 1px solid var(--border2); border-radius: 6px;
+      color: var(--text1); font-size: 12px; padding: 0 8px; outline: none;
+    }
+    .setting-input:focus { border-color: var(--accent); }
     .setting-unit { font-size: 12px; color: var(--text2); }
     .forever-toggle { display: flex; align-items: center; gap: 5px; margin-left: auto; font-size: 12px; color: var(--text2); cursor: pointer; user-select: none; }
     .forever-toggle input { cursor: pointer; }
@@ -618,6 +627,12 @@
       transition: opacity 0.15s;
     }
     .btn-save:hover { opacity: 0.85; }
+    .btn-save:disabled { opacity: 0.7; cursor: wait; }
+    .btn-save-spinner {
+      display: inline-block; width: 10px; height: 10px; margin-right: 5px;
+      border: 1.5px solid rgba(255,255,255,0.45); border-top-color: #fff;
+      border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: -1px;
+    }
     .btn-cancel {
       background: none; border: 1px solid var(--border2); border-radius: 6px;
       color: var(--text2); padding: 6px 12px; font-size: 12px; cursor: pointer;
@@ -701,8 +716,10 @@
         </select>
         <select class="provider-select" id="provider" title="Filter by assistant">
           <option value="">All</option>
-          <option value="claude">Claude</option>
+          <option value="claude">Claude Code</option>
           <option value="codex">Codex</option>
+          <option value="chatgpt">ChatGPT</option>
+          <option value="claude-export">Claude</option>
         </select>
         <!-- Future auxiliary/subagent session browser:
         <label class="aux-toggle"><input type="checkbox" id="show-aux"> Aux</label>
@@ -748,6 +765,24 @@
           <label class="forever-toggle"><input type="checkbox" id="cleanup-forever"> Forever</label>
         </div>
       </div>
+      <div class="setting-row">
+        <label class="setting-label" for="chatgpt-export-path">
+          <em>ChatGPT export folder</em>
+        </label>
+        <input type="text" class="setting-input" id="chatgpt-export-path"
+               placeholder="C:\Users\&lt;user-name&gt;\Downloads\chat-gpt-export"
+               autocomplete="off" spellcheck="false">
+        <div class="setting-hint">Extract the downloaded ZIP first. Leave blank to disable.</div>
+      </div>
+      <div class="setting-row">
+        <label class="setting-label" for="claude-export-path">
+          <em>Claude export folder</em>
+        </label>
+        <input type="text" class="setting-input" id="claude-export-path"
+               placeholder="C:\Users\&lt;user-name&gt;\Downloads\claude-export"
+               autocomplete="off" spellcheck="false">
+        <div class="setting-hint">Extract the downloaded ZIP first. Leave blank to disable.</div>
+      </div>
     </div>
     <div class="modal-footer">
       <span class="save-status" id="save-status"></span>
@@ -779,6 +814,17 @@ let activePlugin = null;
 const pendingDeletes = Object.create(null);
 let pinned = new Set();
 function sessionKey(s) { return s.key || s.id; }
+function sessionProviderName(s) {
+  const provider = s && s.provider || 'claude';
+  return provider === 'chatgpt' ? 'ChatGPT'
+    : provider === 'claude-export' ? 'Claude'
+    : provider === 'claude' ? 'Claude Code'
+    : provider;
+}
+function sessionProviderLabel(s) {
+  const name = sessionProviderName(s);
+  return s && s.accountEmail ? `${name} (${s.accountEmail})` : name;
+}
 function savePins() {
   fetch('/api/pins', {
     method: 'PUT',
@@ -962,10 +1008,13 @@ function renderCard(s) {
   const path    = s.cwd || s.projectDir;
   const size    = fmtSize(s.sizeBytes);
   const provider = s.provider || 'claude';
+  const isExport = provider === 'chatgpt' || provider === 'claude-export';
+  const providerLabel = sessionProviderName(s);
   const key = sessionKey(s);
-  const cmd = provider === 'codex'
+  const copyValue = isExport ? s.url : provider === 'codex'
     ? `codex resume ${s.id}`
     : s.cwd ? `cd "${s.cwd}" && claude --resume ${s.id}` : `claude --resume ${s.id}`;
+  const displayValue = isExport ? s.url : s.id;
   const isActive = key === activeId;
   const isPinned = pinned.has(key);
   const snippet = contentMatches ? contentMatches[key] : undefined;
@@ -975,7 +1024,7 @@ function renderCard(s) {
   return `<div class="session${isActive ? ' active' : ''}" id="s-${esc(key)}" data-id="${esc(key)}">
     <div class="s-top">
       <span class="s-title${s.title ? '' : ' untitled'}">${esc(title)}</span>
-      <span class="s-provider ${esc(provider)}">${esc(provider)}</span>
+      <span class="s-provider ${esc(provider)}" title="${esc(providerLabel)}">${esc(providerLabel)}</span>
     </div>
     <div class="s-path" title="${esc(path)}">${esc(path)}</div>
     ${snippet ? `<div class="s-snippet">${highlightSnippet(snippet)}</div>` : ''}
@@ -989,12 +1038,12 @@ function renderCard(s) {
       <div class="s-actions-meta">
         <div class="s-dates" title="Started: ${esc(s.firstTs)}\nLast: ${esc(s.lastTs)}">${fmtDateRange(s)}</div>
         <button class="btn-pin${isPinned ? ' pinned' : ''}" data-id="${esc(key)}" title="Pin to top">${STAR_SVG}</button>
-        <button class="btn-del" data-id="${s.id}" data-key="${esc(key)}" data-provider="${esc(provider)}" title="Delete (click twice)">${DEL_SVG}</button>
+        ${s.readonly ? '' : `<button class="btn-del" data-id="${s.id}" data-key="${esc(key)}" data-provider="${esc(provider)}" title="Delete (click twice)">${DEL_SVG}</button>`}
       </div>
     </div>
     <div class="s-resume">
-      <span class="s-cmd"><span class="uuid">${esc(s.id)}</span></span>
-      <button class="btn-copy" data-cmd="${esc(cmd)}" title="Copy resume command">${COPY_SVG} Copy</button>
+      <span class="s-cmd"><span class="uuid">${esc(displayValue)}</span></span>
+      <button class="btn-copy" data-cmd="${esc(copyValue)}" title="${isExport ? 'Copy conversation URL' : 'Copy resume command'}">${COPY_SVG} ${isExport ? 'Copy URL' : 'Copy'}</button>
     </div>
   </div>`;
 }
@@ -1539,7 +1588,7 @@ async function openSession(key) {
 
   vHead.innerHTML = `
     <div class="v-head-title">${esc(session?.title || 'Untitled session')}</div>
-    <div class="v-head-meta">${esc(session?.provider || 'claude')}${session?.cwd ? ' &nbsp;·&nbsp; ' + esc(session.cwd) : ''}${dateMeta ? ' &nbsp;·&nbsp; ' + dateMeta : ''}</div>`;
+    <div class="v-head-meta">${esc(sessionProviderLabel(session))}${session?.cwd ? ' &nbsp;·&nbsp; ' + esc(session.cwd) : ''}${dateMeta ? ' &nbsp;·&nbsp; ' + dateMeta : ''}</div>`;
 
   vBody.innerHTML = '<div class="state"><div class="spinner"></div>Loading conversation…</div>';
   vBody.scrollTop = 0;
@@ -1629,7 +1678,10 @@ function renderTurn(msg) {
   if (msg.role === 'assistant') {
     const textParts = msg.parts.filter(p => p.kind === 'text');
     const toolParts = msg.parts.filter(p => p.kind === 'tool_use');
-    const assistantName = msg.provider === 'codex' ? 'Codex' : 'Claude';
+    const assistantName = msg.provider === 'codex' ? 'Codex'
+      : msg.provider === 'chatgpt' ? 'ChatGPT'
+      : msg.provider === 'claude-export' ? 'Claude'
+      : 'Claude Code';
     return `<div class="turn assistant">
       <div class="turn-label">${assistantName} ${ts}</div>
       <div class="md-body">${textParts.map(p => renderMd(p.text)).join('')}</div>
@@ -1690,6 +1742,8 @@ async function openSettings() {
   document.getElementById('save-status').className = 'save-status';
   const num = document.getElementById('cleanup-days');
   const forever = document.getElementById('cleanup-forever');
+  const chatgptPath = document.getElementById('chatgpt-export-path');
+  const claudePath = document.getElementById('claude-export-path');
   try {
     const settings = await fetch('/api/settings').then(r => r.json());
     // cleanupPeriodDays is an implicit default of 30 when the key is absent (per Claude Code docs)
@@ -1697,6 +1751,8 @@ async function openSettings() {
     forever.checked = days >= 999999;
     num.value = forever.checked ? 999999 : days;   // show 999999 (disabled) when Forever is on
     num.disabled = forever.checked;
+    chatgptPath.value = settings && settings.chatgptExportPath || '';
+    claudePath.value = settings && settings.claudeExportPath || '';
   } catch {}
   document.getElementById('settings-modal').style.display = 'flex';
 }
@@ -1707,6 +1763,7 @@ function closeSettings() {
 
 async function saveSettings() {
   const status = document.getElementById('save-status');
+  const saveButton = document.getElementById('save-settings');
   let days;
   if (document.getElementById('cleanup-forever').checked) {
     days = 999999;
@@ -1719,17 +1776,38 @@ async function saveSettings() {
     }
     if (days > 999998) days = 999998;   // 999999 is reserved for "Forever"
   }
+  const originalButton = saveButton.innerHTML;
+  saveButton.disabled = true;
+  saveButton.setAttribute('aria-busy', 'true');
+  saveButton.innerHTML = '<span class="btn-save-spinner"></span>Saving';
   try {
-    await fetch('/api/settings', {
+    const response = await fetch('/api/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cleanupPeriodDays: days }),
+      body: JSON.stringify({
+        cleanupPeriodDays: days,
+        chatgptExportPath: document.getElementById('chatgpt-export-path').value,
+        claudeExportPath: document.getElementById('claude-export-path').value,
+      }),
     });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Could not save settings');
+    const refreshed = await fetch('/api/refresh', { method: 'POST' });
+    const sessions = await refreshed.json();
+    if (!refreshed.ok) throw new Error(sessions.error || 'Could not reload sessions');
+    allSessions = sessions;
+    contentMatches = null;
+    renderProjectOptions();
+    renderList();
     status.textContent = '✓ Saved';
     status.className = 'save-status ok';
   } catch (e) {
     status.textContent = 'Error: ' + e.message;
     status.className = 'save-status err';
+  } finally {
+    saveButton.disabled = false;
+    saveButton.removeAttribute('aria-busy');
+    saveButton.innerHTML = originalButton;
   }
 }
 
@@ -1761,7 +1839,23 @@ document.getElementById('search').addEventListener('input', () => {
   renderList();
 });
 document.getElementById('sort').addEventListener('change', e => { sortKey = e.target.value; renderList(); });
-document.getElementById('project').addEventListener('change', e => { projectFilter = e.target.value; renderList(); });
+document.getElementById('project').addEventListener('change', e => {
+  projectFilter = e.target.value;
+  if (!projectFilter) {
+    providerFilter = '';
+    document.getElementById('provider').value = '';
+    renderProjectOptions();
+    renderList();
+    return;
+  }
+  const selected = allSessions.find(s => (s.projectKey || s.projectDir) === projectFilter);
+  if (selected && (selected.provider === 'chatgpt' || selected.provider === 'claude-export')) {
+    providerFilter = selected.provider;
+    document.getElementById('provider').value = providerFilter;
+    renderProjectOptions();
+  }
+  renderList();
+});
 document.getElementById('provider').addEventListener('change', e => {
   providerFilter = e.target.value;
   renderProjectOptions();

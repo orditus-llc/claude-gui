@@ -8,6 +8,8 @@
   },
   "files": [
     "index.js",
+    "chatgpt-sessions.js",
+    "claude-export-sessions.js",
     "codex-data.js",
     "codex-sessions.js",
     "session-paths.js",

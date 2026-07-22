@@ -8,6 +8,8 @@ const path = require('path');
 const readline = require('readline');
 const { exec, execFile } = require('child_process');
 const { deleteCodexSessionFile, loadCodexSessions, parseCodexMessages } = require('./codex-sessions');
+const { loadChatGptSessions, parseChatGptMessages, validateChatGptExportPath } = require('./chatgpt-sessions');
+const { loadClaudeExportSessions, parseClaudeExportMessages, validateClaudeExportPath } = require('./claude-export-sessions');
 const {
   deleteCodexMemoryFile,
   listCodexMemoryProject,
@@ -113,7 +115,7 @@ async function parseSession(filePath, projectDir, fallbackCwd = '') {
 
 // Sessions as sent to the client — without the in-memory search text.
 function publicSessions(list) {
-  return list.map(({ searchText, searchLower, filePath, ...rest }) => rest);
+  return list.map(({ searchText, searchLower, filePath, rawConversation, ...rest }) => rest);
 }
 
 // Strip decoration that renders as an unbreakable line when whitespace is
@@ -164,7 +166,10 @@ async function loadSessions() {
     loadClaudeSessions(),
     loadCodexSessions(CODEX_HOME),
   ]);
-  return [...claudeSessions, ...codexSessions]
+  const data = loadData();
+  const chatGptSessions = loadChatGptSessions(String(data.chatgptExportPath || '').trim());
+  const claudeExportSessions = loadClaudeExportSessions(String(data.claudeExportPath || '').trim());
+  return [...claudeSessions, ...codexSessions, ...chatGptSessions, ...claudeExportSessions]
     .sort((a, b) => (b.lastTs || b.firstTs || '').localeCompare(a.lastTs || a.firstTs || ''));
 }
 
@@ -609,6 +614,18 @@ const server = http.createServer(async (req, res) => {
         if (!session || !session.filePath) return jsonResponse(res, { error: 'Session not found' }, 404);
         return jsonResponse(res, await parseCodexMessages(session.filePath));
       }
+      if (provider === 'chatgpt') {
+        if (!cache) cache = await loadSessions();
+        const session = cache.find(s => s.provider === 'chatgpt' && s.id === id);
+        if (!session || !session.rawConversation) return jsonResponse(res, { error: 'Session not found' }, 404);
+        return jsonResponse(res, parseChatGptMessages(session.rawConversation));
+      }
+      if (provider === 'claude-export') {
+        if (!cache) cache = await loadSessions();
+        const session = cache.find(s => s.provider === 'claude-export' && s.id === id);
+        if (!session || !session.rawConversation) return jsonResponse(res, { error: 'Session not found' }, 404);
+        return jsonResponse(res, parseClaudeExportMessages(session.rawConversation));
+      }
       if (provider !== 'claude') return jsonResponse(res, { error: 'Unknown session provider' }, 400);
       return jsonResponse(res, await parseClaudeMessages(id));
     }
@@ -661,7 +678,13 @@ const server = http.createServer(async (req, res) => {
 
   // Read settings
   if (method === 'GET' && pathname === '/api/settings') {
-    try { return jsonResponse(res, JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8'))); }
+    try {
+      const settings = readJson(SETTINGS_PATH);
+      const data = loadData();
+      settings.chatgptExportPath = String(data.chatgptExportPath || '');
+      settings.claudeExportPath = String(data.claudeExportPath || '');
+      return jsonResponse(res, settings);
+    }
     catch (e) { return jsonResponse(res, { error: e.message }, 500); }
   }
 
@@ -669,14 +692,27 @@ const server = http.createServer(async (req, res) => {
   if (method === 'PATCH' && pathname === '/api/settings') {
     try {
       const body = await readBody(req);
-      const settings = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8'));
+      const settings = readJson(SETTINGS_PATH);
+      const data = loadData();
+      const chatgptExportPath = 'chatgptExportPath' in body
+        ? String(body.chatgptExportPath || '').trim()
+        : String(data.chatgptExportPath || '');
+      const claudeExportPath = 'claudeExportPath' in body
+        ? String(body.claudeExportPath || '').trim()
+        : String(data.claudeExportPath || '');
+      validateChatGptExportPath(chatgptExportPath);
+      validateClaudeExportPath(claudeExportPath);
       if ('cleanupPeriodDays' in body) {
         const days = Number(body.cleanupPeriodDays);
         if (Number.isFinite(days) && days >= 1) settings.cleanupPeriodDays = Math.round(days);  // Claude Code rejects 0; minimum is 1
+        fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2));
       }
-      fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2));
-      return jsonResponse(res, settings);
-    } catch (e) { return jsonResponse(res, { error: e.message }, 500); }
+      data.chatgptExportPath = chatgptExportPath;
+      data.claudeExportPath = claudeExportPath;
+      saveData(data);
+      cache = null;
+      return jsonResponse(res, { ...settings, chatgptExportPath, claudeExportPath });
+    } catch (e) { return jsonResponse(res, { error: e.message }, 400); }
   }
 
   // Pins — persisted to the local app data file (claude-gui-data.json)
