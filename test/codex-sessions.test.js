@@ -6,7 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { deleteCodexSessionFile, loadCodexSessions, parseCodexMessages, parseCodexSession } = require('../codex-sessions');
-const { normalizeDisplayPath, resolveEncodedPath } = require('../session-paths');
+const { IS_WSL, normalizeDisplayPath, resolveEncodedPath, toLocalPath } = require('../session-paths');
 
 const ID = 'abcdef12-3456-4789-abcd-ef1234567890';
 
@@ -80,6 +80,25 @@ test('normalizes drive letter case and resolves encoded WSL project paths', t =>
   fs.mkdirSync(expected, { recursive: true });
   const resolved = resolveEncodedPath(root, 'mnt-c-Users-Daniel-Burkhalter-Documents-GitHub-idep-shinygo-citation');
   assert.equal(resolved, expected);
+});
+
+test('translates export folders between Windows and WSL spellings', () => {
+  assert.equal(toLocalPath(''), '');
+  assert.equal(toLocalPath('  "C:\\exports\\claude"  '), toLocalPath('C:\\exports\\claude'));
+
+  const windowsPath = 'C:\\Users\\Daniel Burkhalter\\Documents\\exports\\claude';
+  const wslPath = '/mnt/c/Users/Daniel Burkhalter/Documents/exports/claude';
+  if (IS_WSL) {
+    assert.equal(toLocalPath(windowsPath), wslPath);
+    assert.equal(toLocalPath(wslPath), wslPath);
+  } else if (process.platform === 'win32') {
+    assert.equal(toLocalPath(wslPath), windowsPath);
+    assert.equal(toLocalPath(windowsPath), windowsPath);
+  } else {
+    assert.equal(toLocalPath(wslPath), wslPath);
+  }
+  // Translation must be safe to apply more than once along a call chain.
+  assert.equal(toLocalPath(toLocalPath(windowsPath)), toLocalPath(windowsPath));
 });
 
 test('discovers active, archived, and auxiliary sessions without mutating them', async t => {

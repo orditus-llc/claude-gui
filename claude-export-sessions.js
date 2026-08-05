@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { toLocalPath } = require('./session-paths');
 
 function messageText(message) {
   if (typeof message.text === 'string' && message.text) return message.text;
@@ -68,7 +69,8 @@ function sessionFromConversation(conversation, accountEmail = '') {
   return session;
 }
 
-function validateClaudeExportPath(exportPath) {
+function validateClaudeExportPath(rawPath) {
+  const exportPath = toLocalPath(rawPath);
   if (!exportPath) return;
   if (!fs.existsSync(exportPath)) throw new Error('Claude export folder not found');
   if (!fs.statSync(exportPath).isDirectory()) throw new Error('Claude export path must be a folder');
@@ -86,7 +88,8 @@ function validateClaudeExportPath(exportPath) {
   }
 }
 
-function loadClaudeExportSessions(exportPath) {
+function loadClaudeExportSessions(rawPath) {
+  const exportPath = toLocalPath(rawPath);
   if (!exportPath || !fs.existsSync(exportPath)) return [];
   const conversationsPath = path.join(exportPath, 'conversations.json');
   if (!fs.existsSync(conversationsPath)) return [];

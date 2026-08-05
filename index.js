@@ -18,7 +18,7 @@ const {
   readCodexMemoryFiles,
   writeCodexMemoryFile,
 } = require('./codex-data');
-const { normalizeDisplayPath, resolveClaudeProjectDir } = require('./session-paths');
+const { IS_WSL, normalizeDisplayPath, resolveClaudeProjectDir } = require('./session-paths');
 
 // Default port differs per environment so a Windows instance and a WSL instance
 // can both run at once. WSL2 forwards localhost to Windows, so sharing a default
@@ -35,11 +35,6 @@ const INSTALLED_PLUGINS = path.join(PLUGINS_DIR, 'installed_plugins.json');
 const KNOWN_MARKETPLACES = path.join(PLUGINS_DIR, 'known_marketplaces.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_PATH = path.join(__dirname, 'claude-gui-data.json');
-
-// WSL must be detected as Linux specifically — Windows also sets WSLENV when
-// interop is enabled, so that var alone would misclassify native Windows as WSL.
-const IS_WSL = process.platform === 'linux' &&
-  !!(process.env.WSL_DISTRO_NAME || fs.existsSync('/proc/sys/fs/binfmt_misc/WSLInterop'));
 
 function loadData() {
   try { return JSON.parse(fs.readFileSync(DATA_PATH, 'utf8')); } catch { return {}; }
@@ -714,14 +709,19 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       const settings = readJson(SETTINGS_PATH);
       const data = loadData();
+      const currentChatgptPath = String(data.chatgptExportPath || '');
+      const currentClaudePath = String(data.claudeExportPath || '');
       const chatgptExportPath = 'chatgptExportPath' in body
         ? String(body.chatgptExportPath || '').trim()
-        : String(data.chatgptExportPath || '');
+        : currentChatgptPath;
       const claudeExportPath = 'claudeExportPath' in body
         ? String(body.claudeExportPath || '').trim()
-        : String(data.claudeExportPath || '');
-      validateChatGptExportPath(chatgptExportPath);
-      validateClaudeExportPath(claudeExportPath);
+        : currentClaudePath;
+      // Only what actually changed is validated. A folder that has since been
+      // renamed or removed must not block edits to the other field, and must
+      // not report an error against a field the user never touched.
+      if (chatgptExportPath !== currentChatgptPath) validateChatGptExportPath(chatgptExportPath);
+      if (claudeExportPath !== currentClaudePath) validateClaudeExportPath(claudeExportPath);
       if ('cleanupPeriodDays' in body) {
         const days = Number(body.cleanupPeriodDays);
         if (Number.isFinite(days) && days >= 1) settings.cleanupPeriodDays = Math.round(days);  // Claude Code rejects 0; minimum is 1

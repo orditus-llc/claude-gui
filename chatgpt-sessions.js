@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { toLocalPath } = require('./session-paths');
 
 const EXPORT_FILE_RE = /^conversations(?:[-_]\d+)?\.json$/i;
 
@@ -105,7 +106,8 @@ function sessionFromConversation(conversation, accountEmail = '') {
   return session;
 }
 
-function exportFiles(exportPath) {
+function exportFiles(rawPath) {
+  const exportPath = toLocalPath(rawPath);
   if (!exportPath || !fs.existsSync(exportPath)) return [];
   let stat;
   try { stat = fs.statSync(exportPath); } catch { return []; }
@@ -116,7 +118,8 @@ function exportFiles(exportPath) {
     .map(name => path.join(exportPath, name));
 }
 
-function validateChatGptExportPath(exportPath) {
+function validateChatGptExportPath(rawPath) {
+  const exportPath = toLocalPath(rawPath);
   if (!exportPath) return;
   if (!fs.existsSync(exportPath)) throw new Error('ChatGPT export folder not found');
   if (!fs.statSync(exportPath).isDirectory()) throw new Error('ChatGPT export path must be a folder');
@@ -134,7 +137,8 @@ function validateChatGptExportPath(exportPath) {
   }
 }
 
-function loadChatGptSessions(exportPath) {
+function loadChatGptSessions(rawPath) {
+  const exportPath = toLocalPath(rawPath);
   const sessions = [];
   const seen = new Set();
   let accountEmail = '';

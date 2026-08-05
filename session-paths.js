@@ -6,6 +6,27 @@ const path = require('path');
 
 const claudeProjectPathCache = new Map();
 
+// WSL must be detected as Linux specifically — Windows also sets WSLENV when
+// interop is enabled, so that var alone would misclassify native Windows as WSL.
+const IS_WSL = process.platform === 'linux' &&
+  !!(process.env.WSL_DISTRO_NAME || fs.existsSync('/proc/sys/fs/binfmt_misc/WSLInterop'));
+
+// A Windows instance and a WSL instance of this app share one data file, so a
+// folder saved from one has to stay readable from the other. Paths are stored
+// exactly as the user typed them and translated only when touching the disk.
+function toLocalPath(value) {
+  const raw = String(value || '').trim().replace(/^"|"$/g, '');
+  if (!raw) return '';
+  if (IS_WSL) {
+    const windows = /^([A-Za-z]):[\\/](.*)$/.exec(raw);
+    if (windows) return `/mnt/${windows[1].toLowerCase()}/${windows[2].replace(/\\/g, '/')}`;
+  } else if (process.platform === 'win32') {
+    const mounted = /^\/mnt\/([A-Za-z])\/(.*)$/.exec(raw);
+    if (mounted) return `${mounted[1].toUpperCase()}:\\${mounted[2].replace(/\//g, '\\')}`;
+  }
+  return raw;
+}
+
 function normalizeDisplayPath(value) {
   const displayPath = String(value || '');
   return displayPath.replace(/^([a-z]):(?=[\\/])/, (_, drive) => `${drive.toUpperCase()}:`);
@@ -99,4 +120,4 @@ function resolveClaudeProjectDir(projectDir) {
   return resolved;
 }
 
-module.exports = { normalizeDisplayPath, resolveClaudeProjectDir, resolveEncodedPath };
+module.exports = { IS_WSL, normalizeDisplayPath, resolveClaudeProjectDir, resolveEncodedPath, toLocalPath };
