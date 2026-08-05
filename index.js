@@ -390,7 +390,7 @@ function pluginFileAbsPath(id, rel) {
 //   1. The chooser (OpenAs_RunDLL) no-ops on WSL UNC paths (\\wsl.localhost\…),
 //      so under WSL we copy the file into a Windows-local temp dir first.
 //   2. OpenAs_RunDLL mis-parses any path containing a SPACE (e.g. a "C:\Users\
-//      Daniel Burkhalter\…" home) — it launches but shows only a ghost taskbar
+//      Jane Smith\…" home) — it launches but shows only a ghost taskbar
 //      entry, no dialog. So we always convert to the 8.3 short path (no spaces)
 //      before invoking it. (This is why WSL appeared to work: %TEMP% resolved to
 //      a short, space-free path by chance.)

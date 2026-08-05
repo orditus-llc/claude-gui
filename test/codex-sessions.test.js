@@ -72,13 +72,13 @@ test('deletes only the selected Codex JSONL under a Codex session root', async t
 });
 
 test('normalizes drive letter case and resolves encoded WSL project paths', t => {
-  assert.equal(normalizeDisplayPath('c:\\Users\\Daniel Burkhalter\\project'), 'C:\\Users\\Daniel Burkhalter\\project');
+  assert.equal(normalizeDisplayPath('c:\\Users\\Jane Smith\\project'), 'C:\\Users\\Jane Smith\\project');
 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-gui-path-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const expected = path.join(root, 'mnt', 'c', 'Users', 'Daniel Burkhalter', 'Documents', 'GitHub', 'idep-shinygo-citation');
+  const expected = path.join(root, 'mnt', 'c', 'Users', 'Jane Smith', 'Documents', 'GitHub', 'idep-shinygo-citation');
   fs.mkdirSync(expected, { recursive: true });
-  const resolved = resolveEncodedPath(root, 'mnt-c-Users-Daniel-Burkhalter-Documents-GitHub-idep-shinygo-citation');
+  const resolved = resolveEncodedPath(root, 'mnt-c-Users-Jane-Smith-Documents-GitHub-idep-shinygo-citation');
   assert.equal(resolved, expected);
 });
 
@@ -86,8 +86,8 @@ test('translates export folders between Windows and WSL spellings', () => {
   assert.equal(toLocalPath(''), '');
   assert.equal(toLocalPath('  "C:\\exports\\claude"  '), toLocalPath('C:\\exports\\claude'));
 
-  const windowsPath = 'C:\\Users\\Daniel Burkhalter\\Documents\\exports\\claude';
-  const wslPath = '/mnt/c/Users/Daniel Burkhalter/Documents/exports/claude';
+  const windowsPath = 'C:\\Users\\Jane Smith\\Documents\\exports\\claude';
+  const wslPath = '/mnt/c/Users/Jane Smith/Documents/exports/claude';
   if (IS_WSL) {
     assert.equal(toLocalPath(windowsPath), wslPath);
     assert.equal(toLocalPath(wslPath), wslPath);

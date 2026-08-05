@@ -58,7 +58,7 @@ function resolveWithoutListing(root, encodedRelative, depth) {
 
 // Resolve an encoded Claude project path against the live filesystem. Matching
 // real directory names is what preserves spaces and literal hyphens, which are
-// otherwise ambiguous in names such as "Daniel-Burkhalter-GitHub-my-project".
+// otherwise ambiguous in names such as "Jane-Smith-GitHub-my-project".
 function resolveEncodedPath(root, encodedRelative, depth = 0) {
   if (!encodedRelative || depth > 32) return '';
   let entries;
@@ -78,8 +78,8 @@ function resolveEncodedPath(root, encodedRelative, depth = 0) {
     }
   }
 
-  // Prefer the longest matching real name (for example "Daniel Burkhalter"
-  // before a hypothetical sibling named "Daniel").
+  // Prefer the longest matching real name (for example "Jane Smith"
+  // before a hypothetical sibling named "Jane").
   candidates.sort((a, b) => b.length - a.length);
   for (const candidate of candidates) {
     const resolved = resolveEncodedPath(candidate.fullPath, candidate.rest, depth + 1);
