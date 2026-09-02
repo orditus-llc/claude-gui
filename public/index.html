@@ -70,6 +70,42 @@
       --src-third-lo:    #f6e6d2;
     }
 
+    /* ── Session-index tag palette ───────────────────── */
+    :root {
+      --rail:        #4a7d60;
+      --sx-nest-1:   #0a1610;
+      --sx-nest-2:   #0e1d15;
+      --sx-row-hover:#172b1e;
+      --tag-red:    #e05a5a;  --tag-red-lo:    #2e1214;
+      --tag-orange: #e2873a;  --tag-orange-lo: #2c1d0d;
+      --tag-amber:  #d9a441;  --tag-amber-lo:  #2c2211;
+      --tag-lime:   #9bc93f;  --tag-lime-lo:   #212c12;
+      --tag-green:  #1DB46B;  --tag-green-lo:  #0e2e1c;
+      --tag-teal:   #2fc0ae;  --tag-teal-lo:   #0d2b28;
+      --tag-cyan:   #29b6d8;  --tag-cyan-lo:   #0d2a32;
+      --tag-blue:   #6a8af0;  --tag-blue-lo:   #161f36;
+      --tag-violet: #b07ae8;  --tag-violet-lo: #241834;
+      --tag-pink:   #e878b0;  --tag-pink-lo:   #331526;
+      --tag-slate:  #7f9aa8;  --tag-slate-lo:  #17232a;
+    }
+    body[data-theme="light"] {
+      --rail:        #9cbfad;
+      --sx-nest-1:   #f5faf7;
+      --sx-nest-2:   #edf5f0;
+      --sx-row-hover:#e4f0e9;
+      --tag-red:    #c0392b;  --tag-red-lo:    #fbe2df;
+      --tag-orange: #b4651b;  --tag-orange-lo: #f6e6d2;
+      --tag-amber:  #8a6212;  --tag-amber-lo:  #f7ecd2;
+      --tag-lime:   #5c7a15;  --tag-lime-lo:   #e9f2d3;
+      --tag-green:  #15673E;  --tag-green-lo:  #d0ece0;
+      --tag-teal:   #0f6f65;  --tag-teal-lo:   #d3efeb;
+      --tag-cyan:   #0d7f96;  --tag-cyan-lo:   #d2edf3;
+      --tag-blue:   #3f5fd0;  --tag-blue-lo:   #dce3fb;
+      --tag-violet: #7b4ec2;  --tag-violet-lo: #ebe0fa;
+      --tag-pink:   #b6377c;  --tag-pink-lo:   #fadfec;
+      --tag-slate:  #55707e;  --tag-slate-lo:  #e3ebee;
+    }
+
     html, body { height: 100%; overflow: hidden; }
 
     body {
@@ -197,7 +233,23 @@
       flex-shrink: 0;
     }
     .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .icon-btn:disabled:hover { border-color: var(--border); color: var(--text3); }
     .icon-btn.spinning svg { animation: spin 0.7s linear infinite; }
+
+    .organize-wrap { position: relative; flex-shrink: 0; }
+    .organize-menu {
+      position: absolute; top: calc(100% + 4px); right: 0; z-index: 20;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25); width: 240px; padding: 4px; overflow: hidden;
+    }
+    .organize-menu-item {
+      display: block; width: 100%; text-align: left; background: none; border: none;
+      padding: 8px 10px; border-radius: 6px; cursor: pointer; color: inherit;
+    }
+    .organize-menu-item:hover { background: var(--surface); }
+    .omi-title { font-size: 12px; font-weight: 600; color: var(--text1); }
+    .omi-desc { font-size: 10.5px; color: var(--text3); margin-top: 2px; line-height: 1.4; }
 
     .view-toggle { display: flex; gap: 2px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 2px; }
     .vt-btn {
@@ -338,6 +390,274 @@
       flex: 1; display: flex; align-items: center; justify-content: center;
       color: var(--text3); font-size: 13px; gap: 8px;
     }
+    .v-empty.has-index {
+      display: block; overflow-y: auto; overflow-x: hidden;
+      padding: 26px 30px 40px;
+      container-type: inline-size;
+    }
+
+    /* ── Session index ───────────────────────────────── */
+    .sx-wrap {
+      /* one source of truth for column geometry — the tree rails read from it */
+      --sx-pad:      10px;
+      --sx-c-date:   78px;
+      --sx-c-id:     76px;
+      --sx-c-tags:   300px;
+      --sx-c-menu:   22px;
+      --sx-gap:      14px;
+      --sx-indent:   34px;
+      --sx-caret-w:  16px;
+      --sx-row-h:    38px;
+      --sx-fs-title: 15px;
+      --sx-fs-meta:  11px;
+      --sx-title-x: calc(var(--sx-pad) + var(--sx-c-date) + var(--sx-gap) + var(--sx-c-id) + var(--sx-gap));
+      max-width: 1320px;
+    }
+
+    .sx-header { margin-bottom: 16px; }
+    .sx-h-line { display: flex; align-items: baseline; gap: 10px; }
+    .sx-h-name { font-size: 15px; font-weight: 600; color: var(--text1); letter-spacing: -0.01em; }
+    .sx-h-path {
+      font-family: var(--mono); font-size: 11px; color: var(--text3);
+      margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .sx-legend {
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+      padding: 11px 0 12px; margin-bottom: 6px;
+    }
+    .sx-legend-cap {
+      font-size: 9.5px; letter-spacing: 0.09em; text-transform: uppercase;
+      color: var(--text3); margin-bottom: 8px;
+    }
+    .sx-legend-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 5px 22px;
+    }
+    .sx-leg { display: flex; align-items: center; gap: 7px; min-width: 0; }
+    .sx-leg .sx-tag { flex-shrink: 0; }
+    .sx-leg-gloss {
+      font-size: 10.5px; color: var(--text3); flex: 1; min-width: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .sx-leg-n {
+      font-family: var(--mono); font-size: 10px; color: var(--text3);
+      opacity: 0.75; flex-shrink: 0; font-variant-numeric: tabular-nums;
+    }
+
+    .sx-table { margin-top: 14px; min-width: 0; }
+
+    .sx-row {
+      display: grid;
+      grid-template-columns:
+        var(--sx-c-date) var(--sx-c-id) minmax(0, 1fr) var(--sx-c-tags) var(--sx-c-menu);
+      column-gap: var(--sx-gap);
+      align-items: center;
+      min-height: var(--sx-row-h);
+      padding: 6px var(--sx-pad);
+      border-radius: 5px;
+      cursor: pointer;
+      position: relative;
+    }
+    .sx-row:hover { background: var(--sx-row-hover); box-shadow: inset 2px 0 0 var(--accent); }
+    .sx-row:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; background: var(--sx-row-hover); }
+    .sx-row--open { background: var(--sx-row-hover); box-shadow: inset 2px 0 0 var(--accent); }
+
+    .sx-thead {
+      cursor: default; min-height: 0; padding-top: 0; padding-bottom: 8px;
+      margin-bottom: 4px; border-bottom: 1px solid var(--border);
+      border-radius: 0;
+      font-size: 9.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text3);
+      position: sticky; top: 0; z-index: 2; background: var(--bg);
+    }
+    .sx-thead:hover { background: var(--bg); box-shadow: none; }
+
+    .sx-date {
+      font-family: var(--mono); font-size: var(--sx-fs-meta); color: var(--text3);
+      white-space: nowrap; font-variant-numeric: tabular-nums;
+    }
+    .sx-id {
+      font-family: var(--mono); font-size: var(--sx-fs-meta); color: var(--text3);
+      white-space: nowrap; opacity: 0.8;
+    }
+    .sx-row:hover .sx-id, .sx-row--open .sx-id { opacity: 1; color: var(--text2); }
+
+    .sx-title {
+      min-width: 0; position: relative; display: flex; align-items: center; gap: 8px;
+      padding-left: calc(var(--d, 0) * var(--sx-indent) + var(--sx-caret-w));
+    }
+    .sx-t {
+      font-size: var(--sx-fs-title); font-weight: 500; color: var(--text1);
+      line-height: 1.4; letter-spacing: -0.005em;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+    }
+    /* cited rows step down one notch — subordinate, still fully legible */
+    .sx-row--child .sx-t { font-size: 14px; font-weight: 400; }
+
+    .sx-caret {
+      position: absolute; left: calc(var(--d, 0) * var(--sx-indent));
+      top: 50%; margin-top: -4px;
+      width: 0; height: 0; border-style: solid;
+      border-width: 4px 0 4px 5px;
+      border-color: transparent transparent transparent var(--text3);
+      transform-origin: 2px 4px;
+      transition: transform 0.12s ease, border-left-color 0.12s ease;
+    }
+    .sx-caret--empty { opacity: 0.4; }
+    .sx-row:hover .sx-caret { border-left-color: var(--text2); }
+    .sx-row--open .sx-caret { transform: rotate(90deg); border-left-color: var(--accent); }
+
+    .sx-cites {
+      flex-shrink: 0; font-size: 9.5px; line-height: 15px; padding: 0 6px;
+      border-radius: 3px; white-space: nowrap;
+      color: var(--accent); background: var(--accent-lo);
+    }
+    .sx-badge {
+      flex-shrink: 0; font-size: 9.5px; color: var(--text3);
+      border: 1px solid var(--border); border-radius: 3px; padding: 0 5px; line-height: 15px;
+    }
+
+    .sx-tags { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; row-gap: 3px; min-width: 0; }
+    .sx-tag {
+      font-size: 10px; line-height: 18px; padding: 0 7px; border-radius: 4px;
+      white-space: nowrap; font-weight: 500;
+      background: var(--sx-tag-bg, var(--surface2)); color: var(--sx-tag-fg, var(--text2));
+    }
+    .sx-tag--red    { --sx-tag-fg: var(--tag-red);    --sx-tag-bg: var(--tag-red-lo); }
+    .sx-tag--orange { --sx-tag-fg: var(--tag-orange); --sx-tag-bg: var(--tag-orange-lo); }
+    .sx-tag--amber  { --sx-tag-fg: var(--tag-amber);  --sx-tag-bg: var(--tag-amber-lo); }
+    .sx-tag--lime   { --sx-tag-fg: var(--tag-lime);   --sx-tag-bg: var(--tag-lime-lo); }
+    .sx-tag--green  { --sx-tag-fg: var(--tag-green);  --sx-tag-bg: var(--tag-green-lo); }
+    .sx-tag--teal   { --sx-tag-fg: var(--tag-teal);   --sx-tag-bg: var(--tag-teal-lo); }
+    .sx-tag--cyan   { --sx-tag-fg: var(--tag-cyan);   --sx-tag-bg: var(--tag-cyan-lo); }
+    .sx-tag--blue   { --sx-tag-fg: var(--tag-blue);   --sx-tag-bg: var(--tag-blue-lo); }
+    .sx-tag--violet { --sx-tag-fg: var(--tag-violet); --sx-tag-bg: var(--tag-violet-lo); }
+    .sx-tag--pink   { --sx-tag-fg: var(--tag-pink);   --sx-tag-bg: var(--tag-pink-lo); }
+    .sx-tag--slate  { --sx-tag-fg: var(--tag-slate);  --sx-tag-bg: var(--tag-slate-lo); }
+
+    /* ── Per-row ⋮ menu ──────────────────────────────── */
+    .sx-menu-wrap { position: relative; justify-self: end; }
+    .sx-kebab {
+      background: none; border: none; cursor: pointer; padding: 0 4px;
+      color: var(--text3); font-size: 14px; line-height: 20px; border-radius: 4px;
+      opacity: 0; transition: opacity 0.12s;
+    }
+    .sx-row:hover .sx-kebab, .sx-kebab:focus-visible, .sx-kebab[aria-expanded="true"] { opacity: 1; }
+    .sx-kebab:hover { color: var(--accent); background: var(--surface2); }
+    .sx-menu {
+      position: absolute; top: calc(100% + 4px); right: 0; z-index: 30;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 7px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3); padding: 4px; width: 190px;
+    }
+    .sx-menu-item {
+      display: block; width: 100%; text-align: left; background: none; border: none;
+      color: var(--text1); font: inherit; font-size: 11.5px;
+      padding: 6px 9px; border-radius: 5px; cursor: pointer; white-space: nowrap;
+    }
+    .sx-menu-item:hover { background: var(--surface); color: var(--accent); }
+
+    /* ── Summary: a second grid line inside the row itself, so no new
+       siblings and every rail / :last-child selector stays valid ────── */
+    .sx-summary {
+      display: none;
+      grid-column: 3 / -1; grid-row: 2;
+      padding: 3px 0 6px calc(var(--d, 0) * var(--sx-indent) + var(--sx-caret-w));
+    }
+    .sx-row--open .sx-summary { display: block; }
+    .sx-sum-text {
+      font-size: 12.5px; line-height: 1.62; color: var(--text2);
+      max-width: 78ch;               /* prose measure — never let it run 1700px wide */
+    }
+    .sx-sum-text--none { color: var(--text3); font-style: italic; }
+    .sx-open-full {
+      margin-top: 8px; font-family: inherit; font-size: 10.5px; line-height: 17px;
+      color: var(--text3); background: none;
+      border: 1px solid var(--border); border-radius: 4px; padding: 1px 8px; cursor: pointer;
+    }
+    .sx-open-full:hover { color: var(--accent); border-color: var(--accent); }
+
+    /* ── Citation hierarchy ──────────────────────────────
+       Indentation lives inside the title cell so date / id / tags stay in
+       aligned columns at every depth. The rails hang off .sx-row (not
+       .sx-title) so they survive an expanded summary. */
+    .sx-kids {
+      position: relative;
+      background: var(--sx-nest-1);
+      border-radius: 7px;
+      padding: 3px 0; margin: 2px 0 4px;
+    }
+    .sx-kids .sx-kids { background: var(--sx-nest-2); }
+
+    /* vertical stem: top of the child row down to its own first-line midpoint */
+    .sx-row--child::before {
+      content: ''; position: absolute; width: 2px; background: var(--rail);
+      left: calc(var(--sx-title-x) + (var(--d) - 1) * var(--sx-indent) + 5px);
+      top: -6px; height: calc(var(--sx-row-h) / 2 + 6px);
+      border-radius: 1px;
+    }
+    /* …run it all the way through when more siblings follow */
+    .sx-kids > .sx-row--child:not(:last-child)::before { height: calc(100% + 6px); }
+    /* the elbow, anchored to the first line so it never drifts when open */
+    .sx-row--child::after {
+      content: ''; position: absolute; height: 2px; background: var(--rail);
+      left: calc(var(--sx-title-x) + (var(--d) - 1) * var(--sx-indent) + 5px);
+      width: calc(var(--sx-indent) - 12px);
+      top: calc(var(--sx-row-h) / 2 - 1px);
+      border-radius: 1px;
+    }
+    /* ancestor rail continuing past a nested block */
+    .sx-kids .sx-kids:not(:last-child)::before {
+      content: ''; position: absolute; width: 2px; background: var(--rail);
+      left: calc(var(--sx-title-x) + (var(--d) - 2) * var(--sx-indent) + 5px);
+      top: 0; bottom: 0; border-radius: 1px;
+    }
+    /* hover a parent and its children's connectors light up */
+    .sx-row:hover + .sx-kids > .sx-row--child::before,
+    .sx-row:hover + .sx-kids > .sx-row--child::after { background: var(--accent); }
+
+    /* cited but unclassified — inert, nothing to reveal */
+    .sx-row--ghost { cursor: default; }
+    .sx-row--ghost:hover { box-shadow: none; }
+    .sx-row--ghost .sx-t { color: var(--text3); font-style: italic; font-weight: 400; }
+    .sx-row--ghost .sx-id { opacity: 0.55; }
+
+    /* Narrow pane — drop columns rather than scroll sideways */
+    @container (max-width: 780px) { .sx-wrap { --sx-c-tags: 210px; --sx-c-date: 70px; --sx-indent: 28px; } }
+    @container (max-width: 620px) {
+      .sx-wrap { --sx-c-id: 0px; --sx-indent: 24px;
+                 --sx-title-x: calc(var(--sx-pad) + var(--sx-c-date) + var(--sx-gap)); }
+      .sx-row { grid-template-columns: var(--sx-c-date) minmax(0, 1fr) var(--sx-c-tags) var(--sx-c-menu); }
+      .sx-id { display: none; }
+      .sx-summary { grid-column: 2 / -1; }
+    }
+    @container (max-width: 460px) {
+      .sx-row { grid-template-columns: var(--sx-c-date) minmax(0, 1fr) var(--sx-c-menu); }
+      .sx-tags { display: none; }
+      .sx-summary { grid-column: 2 / -1; }
+    }
+
+    /* .pi-* below is the Organize/Prune modal list — not the index */
+    .pi-head { font-size: 13px; font-weight: 600; color: var(--text1); margin-bottom: 3px; }
+    .pi-sub { font-size: 11px; color: var(--text3); margin-bottom: 18px; }
+    .pi-row {
+      display: flex; align-items: baseline; gap: 12px; padding: 9px 10px;
+      border-radius: 6px; cursor: pointer; border: 1px solid transparent;
+    }
+    .pi-row:hover { background: var(--surface); border-color: var(--border); }
+    .pi-date { font-size: 10.5px; color: var(--text3); white-space: nowrap; flex-shrink: 0; width: 68px; }
+    .pi-title { font-size: 12.5px; color: var(--text1); flex: 1; min-width: 120px; }
+    .pi-tags { display: flex; gap: 4px; flex-wrap: wrap; max-width: 40%; }
+    .tag-pill {
+      font-size: 10px; padding: 1px 8px; border-radius: 999px; white-space: nowrap;
+      background: var(--accent-lo); color: var(--accent);
+    }
+
+    .progress-track {
+      height: 6px; background: var(--border); border-radius: 999px;
+      overflow: hidden; margin: 10px 0 14px;
+    }
+    .progress-fill { height: 100%; width: 0; background: var(--accent); transition: width 0.25s ease; }
+    #organize-progress-list { max-height: 46vh; overflow-y: auto; }
 
     .v-head {
       padding: 11px 20px;
@@ -349,6 +669,11 @@
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .v-head-meta { font-size: 11px; color: var(--text3); margin-top: 2px; }
+    /* Only openSession() uses this row wrapper — the memory and plugin views
+       write .v-head-title/.v-head-meta straight into .v-head, so .v-head
+       itself has to stay a plain block. */
+    .v-head-row { display: flex; align-items: center; gap: 12px; }
+    .v-head-main { flex: 1; min-width: 0; }
 
     .v-body {
       flex: 1;
@@ -577,6 +902,7 @@
       border-radius: 10px; width: 440px; max-width: calc(100vw - 32px);
       box-shadow: 0 20px 60px rgba(0,0,0,0.5);
     }
+    .modal.modal-wide { width: 620px; }   /* organize/prune list titles + tags */
     .modal-head {
       display: flex; align-items: center; justify-content: space-between;
       padding: 14px 16px; border-bottom: 1px solid var(--border);
@@ -684,6 +1010,25 @@
             <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
           </svg>
         </button>
+        <!-- Organize / Prune (this project's sessions) -->
+        <div class="organize-wrap">
+          <button class="icon-btn" id="btn-organize" title="Select a project to organize or prune its sessions" disabled>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9.5 2 11 6.5 15.5 8 11 9.5 9.5 14 8 9.5 3.5 8 8 6.5Z"/>
+              <path d="M18 13v4M16 15h4"/>
+            </svg>
+          </button>
+          <div class="organize-menu" id="organize-menu" style="display:none">
+            <button class="organize-menu-item" id="menu-organize-run">
+              <div class="omi-title">Organize</div>
+              <div class="omi-desc">Title and tag idle sessions, update this project's index.</div>
+            </button>
+            <button class="organize-menu-item" id="menu-prune-run">
+              <div class="omi-title">Prune</div>
+              <div class="omi-desc">Find stray sessions to review for deletion.</div>
+            </button>
+          </div>
+        </div>
         <!-- Refresh -->
         <button class="icon-btn" id="btn-refresh" title="Reload sessions">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
@@ -747,6 +1092,17 @@
     </div>
   </div>
 
+</div>
+
+<!-- ── Organize / Prune modal ────────────────────────── -->
+<div class="modal-overlay" id="organize-modal" style="display:none">
+  <div class="modal modal-wide">
+    <div class="modal-head">
+      <span id="organize-modal-title">Organize</span>
+      <button class="btn-close" id="close-organize">&#x2715;</button>
+    </div>
+    <div class="modal-body" id="organize-modal-body"></div>
+  </div>
 </div>
 
 <!-- ── Settings modal ─────────────────────────────────── -->
@@ -814,8 +1170,15 @@ let pluginItems = [];
 let pluginsLoaded = false;
 let activePlugin = null;
 const pendingDeletes = Object.create(null);
+const pendingPruneDeletes = Object.create(null);
 let pinned = new Set();
 function sessionKey(s) { return s.key || s.id; }
+// The project <select>'s value is a display cwd (or projectDir fallback) —
+// resolve it back to the raw ~/.claude/projects/<dir> name the server APIs key on.
+function currentProjectDir() {
+  const s = allSessions.find(x => (x.projectKey || x.projectDir) === projectFilter);
+  return s && s.provider === 'claude' ? s.projectDir : '';
+}
 function sessionProviderName(s) {
   const provider = s && s.provider || 'claude';
   return provider === 'chatgpt' ? 'ChatGPT'
@@ -1393,6 +1756,7 @@ async function switchView(v) {
   document.querySelector('.sb-row3').style.display = isChats ? '' : 'none';
   document.getElementById('search').placeholder =
     v === 'memory' ? 'Search project path…' : v === 'plugins' ? 'Search plugins…' : 'Search chats…';
+  updateOrganizeButtonState();
   showEmpty();
   if (v === 'memory' && !memProjectsLoaded) {
     document.getElementById('list').innerHTML = '<div class="state"><div class="spinner"></div>Loading…</div>';
@@ -1568,9 +1932,482 @@ async function openPlgFile(btn) {
 }
 
 // ── Viewer ───────────────────────────────────────────────────────────
-function showEmpty() {
-  document.getElementById('v-empty').style.display = 'flex';
+const DEFAULT_EMPTY_HTML = `
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4">
+    <path d="m12 19-7-7 7-7M19 12H5"/>
+  </svg>
+  <span>Select a session to view its conversation</span>`;
+
+const SPARKLE_SVG = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px">
+  <path d="M9.5 2 11 6.5 15.5 8 11 9.5 9.5 14 8 9.5 3.5 8 8 6.5Z"/>
+  <path d="M18 13v4M16 15h4"/>
+</svg>`;
+
+// Hues available to arbitrary, project-invented context tags. Every hue used
+// semantically below is held out of this pool, so a context tag can never wear
+// the colour that means "bug" or "docs".
+const TAG_HUES = ['lime', 'teal', 'cyan', 'pink', 'orange'];
+
+// The six global tags are a closed vocabulary, so their colour is semantic,
+// not hashed — and their meaning doesn't vary per project, so the gloss lives
+// here rather than being generated and stored per project.
+const TAG_TYPES = ['bug', 'feature', 'explore', 'build', 'chore', 'docs'];
+const TAG_SEMANTIC = {
+  'bug':     'red',
+  'bug-fix': 'red',
+  'feature': 'green',
+  'explore': 'violet',
+  'build':   'blue',
+  'chore':   'slate',
+  'docs':    'amber',
+};
+const TAG_GLOSS = {
+  'bug':     'fixing broken behaviour',
+  'feature': 'new capability',
+  'explore': 'research, reading, Q&A',
+  'build':   'packaging, deps, release',
+  'chore':   'upkeep and cleanup',
+  'docs':    'writing documentation',
+};
+
+// A descriptor tag (bug-fdic-quarterly-pinning) belongs to its type prefix.
+// That prefix is the reusable vocabulary — it's what keeps descriptor tags
+// groupable and consistently coloured — while the suffix carries the detail.
+function tagGroup(tag) {
+  const k = String(tag).trim().toLowerCase();
+  const prefix = k.split('-')[0];
+  return TAG_TYPES.includes(prefix) ? prefix : k;
+}
+
+// Semantic where the vocabulary is closed; otherwise FNV-1a over the name, so
+// the same context tag always lands on the same hue with nothing stored.
+function tagHue(tag) {
+  const k = String(tag).trim().toLowerCase();
+  if (TAG_SEMANTIC[k]) return TAG_SEMANTIC[k];
+  const group = tagGroup(k);
+  if (TAG_SEMANTIC[group]) return TAG_SEMANTIC[group];
+  let h = 0x811c9dc5;
+  for (let i = 0; i < k.length; i++) {
+    h ^= k.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return TAG_HUES[(h >>> 0) % TAG_HUES.length];
+}
+const tagPill = t => `<span class="sx-tag sx-tag--${tagHue(t)}">${esc(t)}</span>`;
+
+// Sessions cited by another session (e.g. "read sessions 1, 2, 3 for context")
+// nest under the citing session instead of also appearing at the top level.
+// A cited id can point at a session in a different project, so `resolved`
+// (from the server, scanning every project's index) fills those in; one still
+// not found anywhere just hasn't been organized yet.
+function renderProjectIndex(entries, projectLabel, resolved) {
+  const byId = new Map(entries.map(e => [e.id, e]));
+  const cited = new Set();
+  for (const e of entries) for (const id of (e.cites || [])) cited.add(id);
+
+  const topLevel = entries.filter(e => !cited.has(e.id))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '') ||
+                    (a.title || '').localeCompare(b.title || ''));
+
+  // Counted by group, not by literal tag: descriptor tags are unique per
+  // session, so listing each one would make the legend as long as the table.
+  const counts = new Map();
+  for (const e of entries) for (const t of (e.tags || [])) {
+    const g = tagGroup(t);
+    counts.set(g, (counts.get(g) || 0) + 1);
+  }
+
+  // A session cited by several parents renders in full under each of them.
+  // The repetition is the signal: a session everything cites is an important
+  // one, and burying it behind a back-reference just makes you go hunting.
+  function node(entry, depth, seen) {
+    const known = !!entry.title;
+    const sum = (entry.summary || '').trim();
+    const dateCell = entry.date || '';
+    const kids = (entry.cites || []).filter(id => !seen.has(id));
+    const cls = ['sx-row', depth ? 'sx-row--child' : '', known ? '' : 'sx-row--ghost'].filter(Boolean).join(' ');
+    const caret = known ? `<span class="sx-caret${sum ? '' : ' sx-caret--empty'}" aria-hidden="true"></span>` : '';
+    const citesChip = kids.length ? `<span class="sx-cites">cites ${kids.length}</span>` : '';
+    const xproj = entry.projectDir
+      ? `<span class="sx-badge" title="${esc(entry.projectDir)}">↗ other project</span>` : '';
+    const summary = known ? `
+        <div class="sx-summary">
+          <p class="sx-sum-text${sum ? '' : ' sx-sum-text--none'}">${sum ? esc(sum) : 'No summary stored for this session — re-run Organize to add one.'}</p>
+          <button type="button" class="sx-open-full" data-id="${esc(entry.id)}">Open full conversation ↗</button>
+        </div>` : '';
+    const attrs = known
+      ? ` data-sum tabindex="0" role="button" aria-expanded="false"${sum ? ` title="${esc(sum.slice(0, 140))}"` : ''}`
+      : ` title="Cited by another session but not yet indexed — run Organize."`;
+
+    // Only rows belonging to this project get the menu — a cited session from
+    // another project can't be re-run against this project's index.
+    const menu = entry.local ? `
+        <div class="sx-menu-wrap">
+          <button type="button" class="sx-kebab" aria-expanded="false" aria-haspopup="true" title="More">⋮</button>
+          <div class="sx-menu" hidden>
+            <button type="button" class="sx-menu-item" data-rerun="${esc(entry.id)}">Re-run organization</button>
+          </div>
+        </div>` : '<div></div>';
+
+    const row = `
+      <div class="${cls}" style="--d:${depth}" data-id="${esc(entry.id)}"${attrs}>
+        <div class="sx-date">${esc(dateCell)}</div>
+        <div class="sx-id" title="${esc(entry.id)}">${esc(entry.id.slice(0, 8))}</div>
+        <div class="sx-title">${caret}<span class="sx-t"${known ? ` title="${esc(entry.title)}"` : ''}>${known ? esc(entry.title) : 'not yet classified'}</span>${citesChip}${xproj}</div>
+        <div class="sx-tags">${(entry.tags || []).map(tagPill).join('')}</div>${menu}${summary}
+      </div>`;
+
+    if (!kids.length) return row;
+    const inner = kids.map(id => {
+      const local = byId.get(id);
+      const c = local || (resolved && resolved[id]) || { title: null, tags: [] };
+      return node({ ...c, id, local: !!local }, depth + 1, new Set(seen).add(id));
+    }).join('');
+    return row + `<div class="sx-kids" style="--d:${depth + 1}">${inner}</div>`;
+  }
+
+  const extra = [...counts.keys()].filter(t => !TAG_TYPES.includes(t))
+    .sort((a, b) => counts.get(b) - counts.get(a) || a.localeCompare(b));
+  const legend = [...TAG_TYPES, ...extra].map(g => {
+    const label = TAG_TYPES.includes(g) ? `${g}-*` : g;
+    const gloss = TAG_GLOSS[g] || '';
+    return `
+    <div class="sx-leg"><span class="sx-tag sx-tag--${tagHue(g)}">${esc(label)}</span><span class="sx-leg-gloss">${gloss ? '- ' + esc(gloss) : ''}</span><span class="sx-leg-n">${counts.get(g) || 0}</span></div>`;
+  }).join('');
+
+  const name = String(projectLabel).replace(/[\\/]+$/, '').split(/[\\/]/).pop() || projectLabel;
+
+  return `
+    <div class="sx-wrap">
+      <div class="sx-header">
+        <div class="sx-h-line">
+          <span class="sx-h-name">${esc(name)}</span>
+        </div>
+        <div class="sx-h-path" title="${esc(projectLabel)}">${esc(projectLabel)}</div>
+      </div>
+      <div class="sx-legend">
+        <div class="sx-legend-cap">Tags (${counts.size})</div>
+        <div class="sx-legend-grid">${legend}</div>
+      </div>
+      <div class="sx-table">
+        <div class="sx-row sx-thead" aria-hidden="true">
+          <div class="sx-date">date</div><div class="sx-id">session</div>
+          <div class="sx-title">title</div><div class="sx-tags">tags</div><div></div>
+        </div>
+        ${topLevel.map(e => node({ ...e, local: true }, 0, new Set([e.id]))).join('')}
+      </div>
+    </div>`;
+}
+
+const NO_INDEX_HTML = `
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4">
+    <path d="M9.5 2 11 6.5 15.5 8 11 9.5 9.5 14 8 9.5 3.5 8 8 6.5Z"/>
+  </svg>
+  <span>No sessions indexed yet — Run Organize to populate ${SPARKLE_SVG}</span>`;
+
+// Registered once at module scope — bindProjectIndexHandlers runs on every
+// project switch and would stack duplicate listeners here.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const open = document.querySelectorAll('#v-empty .sx-row--open');
+  if (!open.length) return;
+  open.forEach(r => { r.classList.remove('sx-row--open'); r.setAttribute('aria-expanded', 'false'); });
+});
+
+function bindProjectIndexHandlers() {
+  const root = document.getElementById('v-empty');
+
+  // A row reveals its summary; it no longer opens the transcript. Rows open
+  // independently — reading several summaries at once is the point.
+  root.querySelectorAll('.sx-row[data-sum]').forEach(row => {
+    const toggle = () => {
+      const open = !row.classList.contains('sx-row--open');
+      row.classList.toggle('sx-row--open', open);
+      row.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    row.addEventListener('click', e => {
+      if (!e.target.closest('.sx-open-full') && !e.target.closest('.sx-menu-wrap')) toggle();
+    });
+    row.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  });
+
+  // the only path from the index to the transcript — [data-id] guards against
+  // binding any other button that happens to reuse this class
+  root.querySelectorAll('.sx-open-full[data-id]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    openSession(b.dataset.id);
+  }));
+
+  root.querySelectorAll('.sx-kebab').forEach(btn => btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const menu = btn.nextElementSibling;
+    const opening = menu.hidden;
+    closeRowMenus();
+    menu.hidden = !opening;
+    btn.setAttribute('aria-expanded', opening ? 'true' : 'false');
+  }));
+
+  root.querySelectorAll('.sx-menu-item[data-rerun]').forEach(item => item.addEventListener('click', e => {
+    e.stopPropagation();
+    closeRowMenus();
+    const projectDir = currentProjectDir();
+    if (!projectDir) return;
+    openOrganizeModal('Re-run organization');
+    startOrganizeRun(projectDir, false, item.dataset.rerun);
+  }));
+}
+
+function closeRowMenus() {
+  document.querySelectorAll('#v-empty .sx-menu').forEach(m => { m.hidden = true; });
+  document.querySelectorAll('#v-empty .sx-kebab').forEach(b => b.setAttribute('aria-expanded', 'false'));
+}
+document.addEventListener('click', e => { if (!e.target.closest('.sx-menu-wrap')) closeRowMenus(); });
+
+let emptyRequestToken = 0;
+async function showEmpty() {
+  activeId = null;
   document.getElementById('v-panel').style.display = 'none';
+  const token = ++emptyRequestToken;
+
+  const projectDir = view === 'chats' ? currentProjectDir() : '';
+  if (!projectDir) return setEmptyState('centered', DEFAULT_EMPTY_HTML);
+
+  const selected = allSessions.find(s => s.provider === 'claude' && s.projectDir === projectDir);
+  const projectLabel = (selected && (selected.cwd || selected.projectDir)) || projectDir;
+  setEmptyState('index', '<div class="state"><div class="spinner"></div>Loading index…</div>');
+  try {
+    const { entries, resolved, error } = await fetch(`/api/project-index?project=${encodeURIComponent(projectDir)}`).then(r => r.json());
+    if (token !== emptyRequestToken) return;   // a newer project selection has since superseded this
+    if (error) throw new Error(error);
+    if (!entries || !entries.length) return setEmptyState('centered', NO_INDEX_HTML);
+    setEmptyState('index', renderProjectIndex(entries, projectLabel, resolved));
+    bindProjectIndexHandlers();
+  } catch {
+    if (token !== emptyRequestToken) return;
+    setEmptyState('centered', DEFAULT_EMPTY_HTML);
+  }
+}
+
+// The class and the inline display have to be set together: .v-empty centers a
+// one-line placeholder with flex, the index needs normal block flow, and an
+// inline display:flex silently overrides .v-empty.has-index no matter what the
+// stylesheet says — which is exactly how the index once rendered sideways.
+function setEmptyState(mode, html) {
+  const empty = document.getElementById('v-empty');
+  empty.className = mode === 'index' ? 'v-empty has-index' : 'v-empty';
+  empty.style.display = mode === 'index' ? 'block' : 'flex';
+  empty.innerHTML = html;
+}
+
+// ── Organize / Prune ────────────────────────────────────────────────
+function updateOrganizeButtonState() {
+  const btn = document.getElementById('btn-organize');
+  const enabled = view === 'chats' && !!currentProjectDir();
+  btn.disabled = !enabled;
+  btn.title = enabled ? 'Organize or prune this project’s sessions' : 'Select a project to organize or prune its sessions';
+  if (!enabled) document.getElementById('organize-menu').style.display = 'none';
+}
+
+function openOrganizeModal(title) {
+  document.getElementById('organize-modal-title').textContent = title;
+  document.getElementById('organize-modal').style.display = 'flex';
+}
+function closeOrganizeModal() {
+  document.getElementById('organize-modal').style.display = 'none';
+}
+
+const ORGANIZE_CONFIRM_OVER = 10;   // ask before committing to a long run
+
+async function runOrganize(force) {
+  const projectDir = currentProjectDir();
+  if (!projectDir) return;
+  document.getElementById('organize-menu').style.display = 'none';
+  openOrganizeModal(force ? 'Force re-run' : 'Organize');
+  const body = document.getElementById('organize-modal-body');
+  body.innerHTML = '<div class="state"><div class="spinner"></div>Checking what needs classifying…</div>';
+  try {
+    const url = `/api/organize/pending?project=${encodeURIComponent(projectDir)}${force ? '&force=1' : ''}`;
+    const { pending, error } = await fetch(url).then(r => r.json());
+    if (error) throw new Error(error);
+    if (!pending) {
+      if (force) {
+        body.innerHTML = '<div class="pi-sub">Nothing to re-run — this project has no idle sessions.</div>';
+        return;
+      }
+      // The only place a forced re-run is offered: right where you've just
+      // been told there's nothing to do but the summaries still look wrong.
+      body.innerHTML = `
+        <div class="pi-sub">Nothing new to classify — every idle session in this project is already indexed.</div>
+        <div style="display:flex; gap:8px; margin-top:14px">
+          <button class="btn-cancel" id="organize-force">Force re-run</button>
+        </div>`;
+      document.getElementById('organize-force').addEventListener('click', () => runOrganize(true));
+      return;
+    }
+    // A forced run always confirms: it costs money and overwrites work that
+    // already exists, regardless of how few sessions are involved.
+    if (!force && pending <= ORGANIZE_CONFIRM_OVER) return startOrganizeRun(projectDir, force);
+
+    body.innerHTML = `
+      <div class="pi-sub">${force
+        ? `Re-classify all ${pending} sessions, replacing their existing titles, tags and summaries.`
+        : `${pending} sessions to classify.`}</div>
+      <div style="display:flex; gap:8px; margin-top:14px">
+        <button class="btn-save" id="organize-confirm">${force ? `Re-run all ${pending}` : `Organize all ${pending}`}</button>
+        <button class="btn-cancel" id="organize-cancel">Cancel</button>
+      </div>`;
+    document.getElementById('organize-cancel').addEventListener('click', closeOrganizeModal);
+    document.getElementById('organize-confirm').addEventListener('click', () => startOrganizeRun(projectDir, force));
+  } catch (e) {
+    body.innerHTML = `<div class="state">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+// Reads the NDJSON progress stream: one event per session, so the run reports
+// as it goes instead of sitting silent until every session is done.
+async function readNdjson(resp, onEvent) {
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop();   // trailing partial line waits for the next chunk
+    for (const line of lines) if (line.trim()) onEvent(JSON.parse(line));
+  }
+  if (buffer.trim()) onEvent(JSON.parse(buffer));
+}
+
+async function startOrganizeRun(projectDir, force, only) {
+  const body = document.getElementById('organize-modal-body');
+  body.innerHTML = `
+    <div class="pi-sub" id="organize-progress-text">Starting…</div>
+    <div class="progress-track"><div class="progress-fill" id="organize-progress-fill"></div></div>
+    <div id="organize-progress-list"></div>`;
+  const text = document.getElementById('organize-progress-text');
+  const fill = document.getElementById('organize-progress-fill');
+  const list = document.getElementById('organize-progress-list');
+
+  try {
+    const resp = await fetch('/api/organize', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project: projectDir, force: !!force, only: only || '' }),
+    });
+    if (!resp.ok) throw new Error((await resp.json().catch(() => ({}))).error || `HTTP ${resp.status}`);
+
+    await readNdjson(resp, evt => {
+      if (evt.phase === 'error') throw new Error(evt.error);
+      if (evt.phase === 'start') {
+        text.textContent = `Classifying ${evt.index} of ${evt.total}…`;
+        fill.style.width = `${Math.round(((evt.index - 1) / evt.total) * 100)}%`;
+        return;
+      }
+      if (evt.phase === 'complete') {
+        fill.style.width = '100%';
+        text.textContent = `Classified ${evt.classified.length}, skipped ${evt.skipped.length}`
+          + (evt.failed.length ? `, failed ${evt.failed.length}` : '') + '.';
+        return;
+      }
+      fill.style.width = `${Math.round((evt.index / evt.total) * 100)}%`;
+      list.insertAdjacentHTML('beforeend', renderOrganizeRow(evt));
+      list.scrollTop = list.scrollHeight;
+    });
+
+    allSessions = await fetch('/api/refresh', { method: 'POST' }).then(r => r.json());
+    renderProjectOptions();
+    renderList();
+    if (!activeId) showEmpty();
+  } catch (e) {
+    body.innerHTML = `<div class="state">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderOrganizeRow(evt) {
+  if (evt.phase === 'failed') {
+    return `<div class="pi-row"><div class="pi-title" style="color:var(--red)">${esc(evt.id.slice(0, 8))} — ${esc(evt.error)}</div></div>`;
+  }
+  if (evt.skipped) {
+    return `<div class="pi-row"><div class="pi-title" style="opacity:0.55">${esc(evt.id.slice(0, 8))} — skipped (${esc(evt.skipped)})</div></div>`;
+  }
+  return `
+    <div class="pi-row">
+      <div class="pi-title">${esc(evt.title)}</div>
+      <div class="pi-tags">${(evt.tags || []).map(t => `<span class="tag-pill">${esc(t)}</span>`).join('')}</div>
+    </div>`;
+}
+
+async function runPrune() {
+  const projectDir = currentProjectDir();
+  if (!projectDir) return;
+  document.getElementById('organize-menu').style.display = 'none';
+  openOrganizeModal('Prune');
+  const body = document.getElementById('organize-modal-body');
+  body.innerHTML = '<div class="state"><div class="spinner"></div>Looking for stray sessions…</div>';
+  try {
+    const result = await fetch('/api/prune', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project: projectDir }),
+    }).then(r => r.json());
+    if (result.error) throw new Error(result.error);
+    body.innerHTML = renderPruneResult(result.candidates || []);
+    bindPruneResultHandlers();
+  } catch (e) {
+    body.innerHTML = `<div class="state">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderPruneResult(candidates) {
+  if (!candidates.length) return '<div class="pi-sub">Nothing looks stray in this project — no suggestions.</div>';
+  const rows = candidates.map(c => {
+    const s = allSessions.find(x => x.provider === 'claude' && x.id === c.sessionId);
+    return `
+      <div class="pi-row">
+        <div style="flex:1; min-width:0">
+          <div class="pi-title">${esc(s && s.title || 'Untitled session')}</div>
+          <div class="pi-sub" style="margin:2px 0 0">${esc(c.reason)}</div>
+        </div>
+        <button class="btn-del" data-id="${esc(c.sessionId)}" title="Delete (click twice)">${DEL_SVG}</button>
+      </div>`;
+  }).join('');
+  return `<div class="pi-sub">${candidates.length} candidate${candidates.length === 1 ? '' : 's'} — nothing is deleted until you confirm each one.</div>${rows}`;
+}
+
+function bindPruneResultHandlers() {
+  document.querySelectorAll('#organize-modal-body .btn-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      if (pendingPruneDeletes[id]) {
+        clearTimeout(pendingPruneDeletes[id]); delete pendingPruneDeletes[id];
+        const row = btn.closest('.pi-row');
+        fetch(`/api/sessions/${id}?provider=claude`, { method: 'DELETE' })
+          .then(r => r.json()).then(data => {
+            if (!data.success) throw new Error(data.error || 'Delete failed');
+            row.remove();
+            allSessions = allSessions.filter(s => sessionKey(s) !== id);
+            if (pinned.delete(id)) savePins();
+            if (activeId === id) showEmpty();
+            renderProjectOptions();
+            renderList();
+          }).catch(() => {
+            fetch('/api/sessions').then(r => r.json()).then(sessions => {
+              allSessions = sessions; renderProjectOptions(); renderList();
+            });
+          });
+      } else {
+        btn.classList.add('confirming');
+        btn.innerHTML = 'Delete?';
+        pendingPruneDeletes[id] = setTimeout(() => {
+          btn.classList.remove('confirming');
+          btn.innerHTML = DEL_SVG;
+          delete pendingPruneDeletes[id];
+        }, 2000);
+      }
+    });
+  });
 }
 
 async function openSession(key) {
@@ -1593,9 +2430,25 @@ async function openSession(key) {
     : !s2 ? fmtFull(s1)
     : `${fmtShortDate(s1)} &rarr; ${fmtFull(s2)}`;
 
+  // Only offered when a project is selected — that's the only case where
+  // there's an index behind this session to go back to.
+  const backBtn = currentProjectDir() ? `
+    <button class="icon-btn" id="btn-back-index" title="Back to Index Page">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+    </button>` : '';
+
   vHead.innerHTML = `
-    <div class="v-head-title">${esc(session?.title || 'Untitled session')}</div>
-    <div class="v-head-meta">${esc(sessionProviderLabel(session))}${session?.cwd ? ' &nbsp;·&nbsp; ' + esc(session.cwd) : ''}${dateMeta ? ' &nbsp;·&nbsp; ' + dateMeta : ''}</div>`;
+    <div class="v-head-row">
+      <div class="v-head-main">
+        <div class="v-head-title">${esc(session?.title || 'Untitled session')}</div>
+        <div class="v-head-meta">${esc(sessionProviderLabel(session))}${session?.cwd ? ' &nbsp;·&nbsp; ' + esc(session.cwd) : ''}${dateMeta ? ' &nbsp;·&nbsp; ' + dateMeta : ''}</div>
+      </div>
+      ${backBtn}
+    </div>`;
+  const backEl = document.getElementById('btn-back-index');
+  if (backEl) backEl.addEventListener('click', () => showEmpty());
 
   vBody.innerHTML = '<div class="state"><div class="spinner"></div>Loading conversation…</div>';
   vBody.scrollTop = 0;
@@ -1849,11 +2702,13 @@ document.getElementById('search').addEventListener('input', () => {
 document.getElementById('sort').addEventListener('change', e => { sortKey = e.target.value; renderList(); });
 document.getElementById('project').addEventListener('change', e => {
   projectFilter = e.target.value;
+  updateOrganizeButtonState();
   if (!projectFilter) {
     providerFilter = '';
     document.getElementById('provider').value = '';
     renderProjectOptions();
     renderList();
+    if (!activeId) showEmpty();
     return;
   }
   const selected = allSessions.find(s => (s.projectKey || s.projectDir) === projectFilter);
@@ -1863,12 +2718,26 @@ document.getElementById('project').addEventListener('change', e => {
     renderProjectOptions();
   }
   renderList();
+  if (!activeId) showEmpty();
 });
 document.getElementById('provider').addEventListener('change', e => {
   providerFilter = e.target.value;
   renderProjectOptions();
   if (activeId && !getFiltered().some(s => sessionKey(s) === activeId)) { activeId = null; showEmpty(); }
   renderList();
+});
+document.getElementById('btn-organize').addEventListener('click', () => {
+  const menu = document.getElementById('organize-menu');
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.organize-wrap')) document.getElementById('organize-menu').style.display = 'none';
+});
+document.getElementById('menu-organize-run').addEventListener('click', () => runOrganize(false));
+document.getElementById('menu-prune-run').addEventListener('click', runPrune);
+document.getElementById('close-organize').addEventListener('click', closeOrganizeModal);
+document.getElementById('organize-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('organize-modal')) closeOrganizeModal();
 });
 document.getElementById('btn-theme').addEventListener('click', toggleTheme);
 document.getElementById('vt-chats').addEventListener('click', () => switchView('chats'));
@@ -1893,6 +2762,7 @@ refreshBtn.addEventListener('click', async () => {
       try { pluginItems = await fetch('/api/plugins').then(r => r.json()); pluginsLoaded = true; } catch {}
     }
     renderList();
+    updateOrganizeButtonState();
   } finally { refreshBtn.classList.remove('spinning'); }
 });
 
@@ -1912,6 +2782,7 @@ async function init() {
   pinned = new Set(Array.isArray(pinsData.pins) ? pinsData.pins : []);
   renderProjectOptions();
   renderList();
+  updateOrganizeButtonState();
 }
 
 init().catch(e => {
