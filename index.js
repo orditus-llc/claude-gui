@@ -19,6 +19,15 @@ const {
   writeCodexMemoryFile,
 } = require('./codex-data');
 const { IS_WSL, normalizeDisplayPath, resolveClaudeProjectDir } = require('./session-paths');
+const {
+  sessionsIndexPath,
+  parseSessionsIndex,
+  resolveCitedEntries,
+  removeSessionFromIndexes,
+  listPendingSessions,
+  organizeProject,
+  pruneProject,
+} = require('./organize');
 
 // Default port differs per environment so a Windows instance and a WSL instance
 // can both run at once. WSL2 forwards localhost to Windows, so sharing a default
@@ -688,6 +697,9 @@ const server = http.createServer(async (req, res) => {
         found = true; break;
       }
     }
+    // Drop it from the session index too, and from any other session's cites —
+    // otherwise it lingers as a row that opens nothing.
+    if (found) removeSessionFromIndexes(CLAUDE_PROJECTS, id);
     return jsonResponse(res, { success: found }, found ? 200 : 404);
   }
 
@@ -776,6 +788,83 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       return jsonResponse(res, deleteMemoryFile(body.provider || 'claude', body.project, body.name));
     } catch (e) { return jsonResponse(res, { error: e.message }, 400); }
+  }
+
+  // Organize: read a project's flat session index (title/tags per session)
+  if (method === 'GET' && pathname === '/api/project-index') {
+    const project = requestUrl.searchParams.get('project') || '';
+    if (!/^[^/\\]+$/.test(project)) return jsonResponse(res, { error: 'invalid project' }, 400);
+    try {
+      const { entries } = parseSessionsIndex(sessionsIndexPath(CLAUDE_PROJECTS, project));
+      entries.sort((a, b) => b.date.localeCompare(a.date) || a.title.localeCompare(b.title));
+      // A session's citations often point outside this project — resolve
+      // whichever cited ids aren't already one of this project's own entries.
+      const localIds = new Set(entries.map(e => e.id));
+      const missing = new Set();
+      for (const e of entries) for (const id of (e.cites || [])) if (!localIds.has(id)) missing.add(id);
+      const resolved = resolveCitedEntries(CLAUDE_PROJECTS, [...missing]);
+      return jsonResponse(res, { entries, resolved });
+    } catch (e) { return jsonResponse(res, { error: e.message }, 500); }
+  }
+
+  // Organize: how many sessions a run would classify, so the client can warn
+  // before committing to a long, paid run.
+  if (method === 'GET' && pathname === '/api/organize/pending') {
+    const project = requestUrl.searchParams.get('project') || '';
+    if (!/^[^/\\]+$/.test(project)) return jsonResponse(res, { error: 'invalid project' }, 400);
+    try {
+      const force = requestUrl.searchParams.get('force') === '1';
+      const pending = listPendingSessions({ claudeProjectsDir: CLAUDE_PROJECTS, projectDir: project, force });
+      return jsonResponse(res, { pending: pending.length });
+    } catch (e) { return jsonResponse(res, { error: e.message }, 500); }
+  }
+
+  // Organize: title + tag every idle, unindexed session in one project.
+  // Purely additive — writes an ai-title line into each session's own
+  // transcript and updates SESSIONS.md; never deletes anything.
+  // Streamed as NDJSON (one event per session) rather than answered once at
+  // the end, since a full project can be minutes of headless calls.
+  if (method === 'POST' && pathname === '/api/organize') {
+    const body = await readBody(req);
+    const project = String(body.project || '');
+    if (!/^[^/\\]+$/.test(project)) return jsonResponse(res, { error: 'invalid project' }, 400);
+    if (!fs.existsSync(path.join(CLAUDE_PROJECTS, project))) return jsonResponse(res, { error: 'project not found' }, 404);
+    const projectLabel = resolveClaudeProjectDir(project) || project;
+    res.writeHead(200, { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-cache' });
+    // The client may close the modal mid-run; the work still finishes and is
+    // still written, so a dead socket is only a reason to stop reporting.
+    const send = (event) => { try { res.write(JSON.stringify(event) + '\n'); } catch {} };
+    try {
+      const only = /^[0-9a-f-]{36}$/i.test(String(body.only || '')) ? String(body.only) : '';
+      const result = await organizeProject({
+        claudeProjectsDir: CLAUDE_PROJECTS, projectDir: project, projectLabel, onProgress: send,
+        force: body.force === true, only,
+      });
+      cache = null;  // ai-title lines just changed session titles
+      send({ phase: 'complete', ...result });
+    } catch (e) {
+      send({ phase: 'error', error: e.message });
+    }
+    return res.end();
+  }
+
+  // Prune: ask the model to suggest stray/abandoned sessions to review for
+  // deletion. Never deletes anything itself — the client still deletes each
+  // one through the normal two-click confirm, same as any other session.
+  if (method === 'POST' && pathname === '/api/prune') {
+    try {
+      const body = await readBody(req);
+      const project = String(body.project || '');
+      if (!/^[^/\\]+$/.test(project)) return jsonResponse(res, { error: 'invalid project' }, 400);
+      if (!cache) cache = await loadSessions();
+      const sessions = cache
+        .filter(s => s.provider === 'claude' && s.projectDir === project)
+        .map(s => ({ id: s.id, title: s.title, msgCount: s.msgCount, lastTs: s.lastTs, firstText: (s.searchText || '').slice(0, 300) }));
+      if (!sessions.length) return jsonResponse(res, { candidates: [] });
+      const projectLabel = resolveClaudeProjectDir(project) || project;
+      const result = await pruneProject({ projectLabel, sessions });
+      return jsonResponse(res, result);
+    } catch (e) { return jsonResponse(res, { error: e.message }, 500); }
   }
 
   // Plugins: list installed plugins
