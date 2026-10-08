@@ -58,11 +58,15 @@ function collectSpokenText(content, out) {
 // from index.js's parseSession (which carries context-token counts, size,
 // etc. this doesn't need) to avoid a require cycle — index.js requires this
 // module, not the other way around.
-// Matched against raw line text (not just parsed spoken text), so a session id
-// pasted into a subagent's Task prompt is caught too, not just plain prose.
-// Every match still has to name a real session file (checked by the caller
-// against listAllSessionIds) — that's what filters out the per-message
-// uuid/parentUuid fields every line already carries, which are NOT citations.
+// A citation is a session someone in this conversation named out loud — the
+// user in a prompt, or the assistant in its reply. Nothing else is scanned:
+// tool calls and their output carry session ids constantly and incidentally
+// (one `ls` or `find` over ~/.claude/projects names dozens of real but merely
+// listed sessions, a `for` loop enumerates them, a path points at a scratchpad
+// dir), and those drown out the handful anyone actually referred to. Every
+// match still has to name a real session file (checked by the caller against
+// listAllSessionIds) — that's what filters out the per-message uuid/parentUuid
+// fields every line already carries, which are NOT citations.
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 
 async function readSessionInfo(filePath) {
@@ -72,8 +76,6 @@ async function readSessionInfo(filePath) {
     const rl = readline.createInterface({ input: fs.createReadStream(filePath), crlfDelay: Infinity });
     rl.on('line', (line) => {
       if (!line.trim()) return;
-      const uuids = line.match(UUID_RE);
-      if (uuids) for (const u of uuids) info.cited.add(u.toLowerCase());
       let d; try { d = JSON.parse(line); } catch { return; }
       if (!info.cwd && d.cwd) info.cwd = d.cwd;
       // Only reached for a session not yet in our own index, so any ai-title
@@ -94,6 +96,9 @@ async function readSessionInfo(filePath) {
     rl.on('close', resolve); rl.on('error', resolve);
   });
   const full = spoken.join('\n');
+  // Scanned before the length cap below, so a citation in the middle of a very
+  // long session isn't lost with the elided text.
+  for (const m of full.matchAll(UUID_RE)) info.cited.add(m[0].toLowerCase());
   info.text = full.length <= MAX_TEXT_CHARS
     ? full
     : `${full.slice(0, HEAD_CHARS)}\n\n…[middle of session omitted]…\n\n${full.slice(-TAIL_CHARS)}`;

@@ -1380,7 +1380,7 @@ function renderCard(s) {
   const copyValue = isExport ? s.url : provider === 'codex'
     ? `codex resume ${s.id}`
     : provider === 'antigravity' ? `agy --conversation ${s.id}`
-    : s.cwd ? `cd "${s.cwd}" && claude --resume ${s.id}` : `claude --resume ${s.id}`;
+    : s.cwd ? `cd "${s.cwd}"; claude --resume ${s.id}` : `claude --resume ${s.id}`;
   const displayValue = isExport ? s.url : s.id;
   const isActive = key === activeId;
   const isPinned = pinned.has(key);
